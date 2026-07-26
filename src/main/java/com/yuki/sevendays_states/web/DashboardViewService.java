@@ -256,6 +256,7 @@ public class DashboardViewService {
 	                 coalesce(player_position_y, position_y) as y,
 	                 coalesce(player_position_z, position_z) as z
           from t_sleeper_transaction s
+          where transaction_type <> 'SLEEPER_RESTORE'
           union all
           select occurred_at,
                  'XP' as kind,

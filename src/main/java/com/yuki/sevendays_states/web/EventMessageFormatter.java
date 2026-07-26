@@ -22,6 +22,9 @@ public class EventMessageFormatter {
     if ("LEAVE".equals(kind)) {
       return safeActor + "がログアウトした";
     }
+    if ("SLEEPER_RESTORE".equals(kind)) {
+      return "眠っていた敵が再配置された";
+    }
     if (poiName == null || poiName.isBlank()) {
       return safeActor + "が" + actionText;
     }

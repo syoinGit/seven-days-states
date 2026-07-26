@@ -33,6 +33,7 @@ class DashboardViewServiceTests {
     jdbcTemplate.update("delete from t_player_current_state");
     jdbcTemplate.update("delete from t_player_state_snapshot");
     jdbcTemplate.update("delete from t_entity_kill_transaction");
+    jdbcTemplate.update("delete from t_sleeper_transaction");
     jdbcTemplate.update("delete from m_japanese_translation");
     jdbcTemplate.update("delete from m_player");
   }
@@ -110,5 +111,28 @@ class DashboardViewServiceTests {
 
     assertThat(formatter.format("KILL", "DDD烈火王テムジン", "討伐した", null, null))
         .isEqualTo("DDD烈火王テムジンが討伐した！");
+  }
+
+  @Test
+  void timelineKeepsKillEventsAndOmitsSleeperRestoreNoise() {
+    jdbcTemplate.update("""
+        insert into t_entity_kill_transaction
+        (occurred_at, player_name, player_entity_id, target_entity_type, target_entity_id, source_file, source_log_hash)
+        values (timestamp with time zone '2026-07-26 01:22:51+00:00', 'DDD烈火王テムジン', 331, 'zombieBusinessMan', 347, 'log', 'kill-restore-test')
+        """);
+    jdbcTemplate.update("""
+        insert into t_sleeper_transaction
+        (occurred_at, transaction_type, sleeper_volume_x, sleeper_volume_y, sleeper_volume_z,
+         position_x, position_y, position_z, entity_class, source_file, source_log_hash)
+        values (timestamp with time zone '2026-07-26 01:22:52+00:00', 'SLEEPER_RESTORE', 1, 2, 3,
+                4, 5, 6, 'zombieBoe', 'log', 'restore-1')
+        """);
+
+    DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
+
+    assertThat(dashboard.travelEntries())
+        .extracting(DashboardViewService.TravelEntry::kind)
+        .contains("KILL")
+        .doesNotContain("SLEEPER_RESTORE");
   }
 }
