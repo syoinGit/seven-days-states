@@ -10,6 +10,8 @@ import com.yuki.sevendays_states.repository.T_ServerMetricRepository;
 import com.yuki.sevendays_states.repository.T_SleeperTransactionRepository;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -359,6 +361,23 @@ class GameLogImportServiceTests {
         .extracting(row -> row.getPlayerEntityId() + ":" + row.getPlayerName() + ":" + row.getHealth() + ":" + row.getLevel()
             + ":" + row.getPositionX() + ":" + row.getPing() + ":" + row.isOnline())
         .containsExactly("303:PlayerA:77:3:-520:11:true");
+  }
+
+  @Test
+  void importsRawTelnetPlayerListWithoutGameLogTimestamp() {
+    List<String> telnetLines = SevenDaysTelnetService.normalizeLpOutput(List.of(
+        "lp",
+        "Executing command 'lp' by Telnet from 172.18.0.1:32864",
+        "0. id=101, PlayerA, pos=(-532.0, 48.0, -446.1), rot=(-4.2, 369.8, 0.0), remote=True, health=76, deaths=1, zombies=8, players=0, score=8, level=2, pltfmid=Steam_a, crossid=EOS_a, ip=10.0.0.1, ping=7",
+        "Total of 1 in the game"
+    ), LocalDateTime.of(2026, 7, 26, 10, 53, 10));
+
+    GameLogImportResult result = logImportService.importLogLines("telnet:lp", telnetLines);
+
+    assertThat(result.malformedLines()).isZero();
+    assertThat(playerCurrentStateRepository.findAll())
+        .extracting(row -> row.getPlayerName() + ":" + row.getHealth() + ":" + row.getDeaths() + ":" + row.isOnline())
+        .containsExactly("PlayerA:76:1:true");
   }
 
   private Path writeLog(String content) throws Exception {
