@@ -10,4 +10,8 @@ public interface T_PlayerCurrentStateRepository extends JpaRepository<T_PlayerCu
   List<T_PlayerCurrentState> findByOnlineTrue();
 
   List<T_PlayerCurrentState> findByOnlineTrueAndPlayerEntityIdNotIn(Collection<Integer> playerEntityIds);
+
+  List<T_PlayerCurrentState> findByCrossPlatformIdIn(Collection<String> crossPlatformIds);
+
+  List<T_PlayerCurrentState> findByPlatformIdIn(Collection<String> platformIds);
 }

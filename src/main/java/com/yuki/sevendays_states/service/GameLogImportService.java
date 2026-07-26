@@ -45,6 +45,7 @@ import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -465,8 +466,13 @@ public class GameLogImportService {
   private void upsertPlayerCurrentState(
       OffsetDateTime occurredAt,
       PlayerListPositionLogEvent.PlayerPosition player) {
-    T_PlayerCurrentState row = playerCurrentStateRepository.findById(player.playerEntityId())
+    T_PlayerCurrentState row = findCurrentStateByEntityOrExternalId(player)
         .orElseGet(T_PlayerCurrentState::new);
+    if (row.getPlayerEntityId() != null && !row.getPlayerEntityId().equals(player.playerEntityId())) {
+      playerCurrentStateRepository.delete(row);
+      playerCurrentStateRepository.flush();
+      row = new T_PlayerCurrentState();
+    }
     row.setPlayerEntityId(player.playerEntityId());
     row.setPlayerName(player.playerName());
     row.setPositionX(player.positionX());
@@ -487,6 +493,46 @@ public class GameLogImportService {
     row.setOnline(true);
     row.setLastUpdated(occurredAt);
     playerCurrentStateRepository.save(row);
+  }
+
+  private Optional<T_PlayerCurrentState> findCurrentStateByEntityOrExternalId(
+      PlayerListPositionLogEvent.PlayerPosition player) {
+    Optional<T_PlayerCurrentState> byEntity = playerCurrentStateRepository.findById(player.playerEntityId());
+    if (byEntity.isPresent()) {
+      return byEntity;
+    }
+    Set<String> crossPlatformIds = externalIdVariants(player.crossPlatformId(), "EOS");
+    if (!crossPlatformIds.isEmpty()) {
+      Optional<T_PlayerCurrentState> byCrossPlatformId = newestCurrentState(
+          playerCurrentStateRepository.findByCrossPlatformIdIn(crossPlatformIds));
+      if (byCrossPlatformId.isPresent()) {
+        return byCrossPlatformId;
+      }
+    }
+    Set<String> platformIds = externalIdVariants(player.platformId(), "Steam");
+    if (!platformIds.isEmpty()) {
+      return newestCurrentState(playerCurrentStateRepository.findByPlatformIdIn(platformIds));
+    }
+    return Optional.empty();
+  }
+
+  private Optional<T_PlayerCurrentState> newestCurrentState(List<T_PlayerCurrentState> states) {
+    return states.stream()
+        .max(Comparator.comparing(T_PlayerCurrentState::getLastUpdated, Comparator.nullsFirst(Comparator.naturalOrder()))
+            .thenComparing(T_PlayerCurrentState::getPlayerEntityId, Comparator.nullsFirst(Comparator.naturalOrder())));
+  }
+
+  private Set<String> externalIdVariants(String rawValue, String prefix) {
+    if (rawValue == null || rawValue.isBlank()) {
+      return Set.of();
+    }
+    String trimmed = rawValue.trim();
+    String bare = trimmed.startsWith(prefix + "_") ? trimmed.substring(prefix.length() + 1) : trimmed;
+    Set<String> values = new LinkedHashSet<>();
+    values.add(trimmed);
+    values.add(prefix + "_" + bare);
+    values.add(bare);
+    return values;
   }
 
   private void markMissingCurrentStatePlayersOffline(

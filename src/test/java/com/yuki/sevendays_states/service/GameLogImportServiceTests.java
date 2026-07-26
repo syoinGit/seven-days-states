@@ -337,6 +337,30 @@ class GameLogImportServiceTests {
         .containsExactly("PlayerA:false:-532:101");
   }
 
+  @Test
+  void replacesCurrentStateForSameExternalPlayerWhenEntityIdChanges() throws Exception {
+    Path firstLpLog = tempDir.resolve("first-lp-log");
+    Files.writeString(firstLpLog, """
+        2026-07-26T10:53:10 10455.738 INF Executing command 'lp' by Telnet from 172.18.0.1:32864
+        0. id=101, PlayerA, pos=(-532.0, 48.0, -446.1), rot=(-4.2, 369.8, 0.0), remote=True, health=101, deaths=0, zombies=8, players=0, score=8, level=2, pltfmid=Steam_a, crossid=EOS_a, ip=10.0.0.1, ping=7
+        Total of 1 in the game
+        """);
+    Path secondLpLog = tempDir.resolve("second-lp-log");
+    Files.writeString(secondLpLog, """
+        2026-07-26T11:03:10 11055.738 INF Executing command 'lp' by Telnet from 172.18.0.1:32864
+        0. id=303, PlayerA, pos=(-520.0, 49.0, -430.1), rot=(-4.2, 369.8, 0.0), remote=True, health=77, deaths=1, zombies=9, players=0, score=9, level=3, pltfmid=Steam_a, crossid=EOS_a, ip=10.0.0.1, ping=11
+        Total of 1 in the game
+        """);
+
+    logImportService.importLogFile(firstLpLog);
+    logImportService.importLogFile(secondLpLog);
+
+    assertThat(playerCurrentStateRepository.findAll())
+        .extracting(row -> row.getPlayerEntityId() + ":" + row.getPlayerName() + ":" + row.getHealth() + ":" + row.getLevel()
+            + ":" + row.getPositionX() + ":" + row.getPing() + ":" + row.isOnline())
+        .containsExactly("303:PlayerA:77:3:-520:11:true");
+  }
+
   private Path writeLog(String content) throws Exception {
     Path file = tempDir.resolve("log");
     Files.writeString(file, content);

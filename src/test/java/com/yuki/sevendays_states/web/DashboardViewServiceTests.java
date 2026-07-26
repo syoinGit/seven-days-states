@@ -76,6 +76,60 @@ class DashboardViewServiceTests {
   }
 
   @Test
+  void playerStatusesUseLatestCurrentStateForHealthAndOnlineDisplay() {
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    jdbcTemplate.update("""
+        insert into m_player (id, player_key, platform, user_id, native_platform, native_user_id, player_name, last_seen_at)
+        values (1, 'EOS:eos-a', 'EOS', 'eos-a', 'Steam', 'steam-a', 'PlayerA', ?)
+        """, Timestamp.from(now.toInstant()));
+    jdbcTemplate.update("""
+        insert into t_player_state_snapshot (player_id, world_name, game_name, captured_at, last_login, x, y, z, source_hash)
+        values (1, 'World', 'Game', ?, ?, 10, 20, 30, 'snapshot-latest-current-state')
+        """, Timestamp.from(now.minusSeconds(60).toInstant()), Timestamp.from(now.minusSeconds(60).toInstant()));
+    jdbcTemplate.update("""
+        insert into t_player_current_state
+        (player_entity_id, player_name, position_x, position_y, position_z, health, level, platform_id, cross_platform_id, online, last_updated)
+        values (101, 'PlayerA', 1, 2, 3, 10, 1, 'Steam_steam-a', 'EOS_eos-a', true, ?)
+        """, now.minusSeconds(90));
+    jdbcTemplate.update("""
+        insert into t_player_current_state
+        (player_entity_id, player_name, position_x, position_y, position_z, health, level, platform_id, cross_platform_id, online, last_updated)
+        values (303, 'PlayerA', 4, 5, 6, 88, 3, 'Steam_steam-a', 'EOS_eos-a', true, ?)
+        """, now.minusSeconds(5));
+
+    DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
+
+    assertThat(dashboard.playerStatuses()).hasSize(1);
+    assertThat(dashboard.playerStatuses().getFirst().health()).isEqualTo(88);
+    assertThat(dashboard.playerStatuses().getFirst().level()).isEqualTo(3);
+    assertThat(dashboard.playerStatuses().getFirst().coordinate()).isEqualTo("4, 5, 6");
+    assertThat(dashboard.playerStatuses().getFirst().online()).isTrue();
+  }
+
+  @Test
+  void playerStatusesTreatStaleCurrentStateAsOffline() {
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    jdbcTemplate.update("""
+        insert into m_player (id, player_key, platform, user_id, player_name, last_seen_at)
+        values (1, 'EOS:eos-a', 'EOS', 'eos-a', 'PlayerA', ?)
+        """, Timestamp.from(now.toInstant()));
+    jdbcTemplate.update("""
+        insert into t_player_state_snapshot (player_id, world_name, game_name, captured_at, last_login, x, y, z, source_hash)
+        values (1, 'World', 'Game', ?, ?, 10, 20, 30, 'snapshot-stale-current-state')
+        """, Timestamp.from(now.minusSeconds(300).toInstant()), Timestamp.from(now.minusSeconds(300).toInstant()));
+    jdbcTemplate.update("""
+        insert into t_player_current_state
+        (player_entity_id, player_name, position_x, position_y, position_z, health, platform_id, cross_platform_id, online, last_updated)
+        values (101, 'PlayerA', 1, 2, 3, 10, 'Steam_steam-a', 'EOS_eos-a', true, ?)
+        """, now.minusSeconds(300));
+
+    DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
+
+    assertThat(dashboard.playerStatuses()).hasSize(1);
+    assertThat(dashboard.playerStatuses().getFirst().online()).isFalse();
+  }
+
+  @Test
   void killMessageContainsKillerAndVictim() {
     jdbcTemplate.update("""
         insert into t_entity_kill_transaction

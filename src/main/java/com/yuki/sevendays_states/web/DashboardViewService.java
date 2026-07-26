@@ -1,6 +1,9 @@
 package com.yuki.sevendays_states.web;
 
+import com.yuki.sevendays_states.config.SevenDaysDataProperties;
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -11,6 +14,7 @@ import org.springframework.stereotype.Service;
 public class DashboardViewService {
 
   private final JdbcTemplate jdbcTemplate;
+  private final SevenDaysDataProperties properties;
   private final PoiNameService poiNameService;
   private final EventMessageFormatter eventMessageFormatter;
   private final DisplayTimeFormatter displayTimeFormatter = new DisplayTimeFormatter();
@@ -25,6 +29,8 @@ public class DashboardViewService {
   }
 
   private List<PlayerStatus> playerStatuses() {
+    OffsetDateTime currentStateFreshAfter = OffsetDateTime.now(ZoneOffset.UTC)
+        .minusSeconds(properties.transaction().currentStateMaxAgeSeconds());
     return jdbcTemplate.query("""
         with player_identity as (
           select p.*,
@@ -89,7 +95,7 @@ public class DashboardViewService {
                        when c.platform_id is not null and c.platform_id <> '' then 'Steam:' || replace(c.platform_id, 'Steam_', '')
                        else 'ENTITY:' || c.player_entity_id
                      end
-                     order by c.online desc, c.last_updated desc
+                     order by c.last_updated desc, c.online desc
                    ) as state_rank
             from t_player_current_state c
           ) ranked_state
@@ -117,7 +123,10 @@ public class DashboardViewService {
                  c.deaths,
                  c.level,
                  c.ping,
-                 c.online,
+                 case
+                   when c.online = true and c.last_updated >= ? then true
+                   else false
+                 end as online,
                  (
                    select poi.poi_name
                    from m_world_poi poi
@@ -138,8 +147,8 @@ public class DashboardViewService {
                  ) as poi_category,
                  row_number() over (
                    partition by p.id
-                   order by c.online desc nulls last,
-                            coalesce(c.last_updated, pp.occurred_at, s.captured_at) desc nulls last
+                   order by coalesce(c.last_updated, pp.occurred_at, s.captured_at) desc nulls last,
+                            c.online desc nulls last
                  ) as card_rank
           from deduped_players p
           left join latest_snapshot s on s.player_id = p.id
@@ -164,7 +173,7 @@ public class DashboardViewService {
         integer(rs, "deaths"),
         integer(rs, "level"),
         integer(rs, "ping"),
-        booleanValue(rs, "online")));
+        booleanValue(rs, "online")), currentStateFreshAfter);
   }
 
   private List<TravelEntry> travelEntries() {
