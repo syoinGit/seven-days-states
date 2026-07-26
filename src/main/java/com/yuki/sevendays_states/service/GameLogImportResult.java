@@ -5,6 +5,7 @@ public record GameLogImportResult(
     long linesRead,
     long playerJoins,
     long playerLeaves,
+    long playerListPositions,
     long entityKills,
     long levelXpSummaries,
     long sleeperSpawns,

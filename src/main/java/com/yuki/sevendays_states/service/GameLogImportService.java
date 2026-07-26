@@ -161,7 +161,7 @@ public class GameLogImportService {
         }
         Optional<PlayerListPositionLogEvent> playerPositions = playerListPositionParser.parse(lines, i);
         if (playerPositions.isPresent()) {
-          savePlayerListPositions(sourceFileName, playerPositions.get(), context);
+          savePlayerListPositions(sourceFileName, playerPositions.get(), context, counter);
           i += playerPositions.get().consumedLineCount() - 1;
           counter.linesRead += playerPositions.get().consumedLineCount() - 1L;
           continue;
@@ -443,7 +443,8 @@ public class GameLogImportService {
   private void savePlayerListPositions(
       String sourceFile,
       PlayerListPositionLogEvent event,
-      LogImportContext context) {
+      LogImportContext context,
+      Counter counter) {
     for (PlayerListPositionLogEvent.PlayerPosition player : event.players()) {
       String hash = lineHash(sourceFile, event.occurredAt() + "|LP|" + player.playerEntityId(), player.rawLine());
       savePlayerPosition(
@@ -460,6 +461,7 @@ public class GameLogImportService {
       context.playerPositionObserved(player, event.occurredAt());
       upsertPlayerCurrentState(event.occurredAt(), player);
     }
+    counter.playerListPositions += event.players().size();
     markMissingCurrentStatePlayersOffline(event.occurredAt(), event.players());
   }
 
@@ -705,6 +707,7 @@ public class GameLogImportService {
     private long linesRead;
     private long playerJoins;
     private long playerLeaves;
+    private long playerListPositions;
     private long entityKills;
     private long levelXpSummaries;
     private long sleeperSpawns;
@@ -718,6 +721,7 @@ public class GameLogImportService {
       linesRead += result.linesRead();
       playerJoins += result.playerJoins();
       playerLeaves += result.playerLeaves();
+      playerListPositions += result.playerListPositions();
       entityKills += result.entityKills();
       levelXpSummaries += result.levelXpSummaries();
       sleeperSpawns += result.sleeperSpawns();
@@ -733,6 +737,7 @@ public class GameLogImportService {
           linesRead,
           playerJoins,
           playerLeaves,
+          playerListPositions,
           entityKills,
           levelXpSummaries,
           sleeperSpawns,
