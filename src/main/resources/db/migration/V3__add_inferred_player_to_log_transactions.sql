@@ -1,0 +1,14 @@
+ALTER TABLE T_LEVEL_XP_SUMMARY_TRANSACTION
+    ADD COLUMN player_inference_method VARCHAR(80);
+
+ALTER TABLE T_SLEEPER_TRANSACTION
+    ADD COLUMN player_name TEXT;
+
+ALTER TABLE T_SLEEPER_TRANSACTION
+    ADD COLUMN player_entity_id INTEGER;
+
+ALTER TABLE T_SLEEPER_TRANSACTION
+    ADD COLUMN player_inference_method VARCHAR(80);
+
+CREATE INDEX idx_t_sleeper_player_entity_id ON T_SLEEPER_TRANSACTION (player_entity_id);
+CREATE INDEX idx_t_sleeper_player_name ON T_SLEEPER_TRANSACTION (player_name);

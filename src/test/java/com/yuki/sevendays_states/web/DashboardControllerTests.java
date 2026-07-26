@@ -1,0 +1,52 @@
+package com.yuki.sevendays_states.web;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.ui.ConcurrentModel;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@SpringBootTest(properties = {
+    "spring.datasource.url=jdbc:h2:mem:sevendays_states_web;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
+    "spring.datasource.driver-class-name=org.h2.Driver",
+    "spring.jpa.hibernate.ddl-auto=validate",
+    "spring.flyway.enabled=true",
+    "app.sevendays.import.startup-enabled=false"
+})
+class DashboardControllerTests {
+
+  @Autowired
+  private DashboardController controller;
+
+  @Test
+  void dashboardReturnsViewAndModel() {
+    ConcurrentModel model = new ConcurrentModel();
+
+    String viewName = controller.index(model);
+
+    assertThat(viewName).isEqualTo("dashboard");
+    assertThat(model).containsKey("dashboard");
+  }
+
+  @Test
+  void dashboardTemplateDoesNotRenderSensitiveIdentifiers() throws Exception {
+    String template = Files.readString(Path.of("src/main/resources/templates/dashboard.html"));
+
+    assertThat(template)
+        .doesNotContain("Steam_")
+        .doesNotContain("EOS_")
+        .doesNotContain("platform_id")
+        .doesNotContain("cross_platform_id")
+        .doesNotContain("native_user_id")
+        .doesNotContain("source_log_hash")
+        .doesNotContain("source_file")
+        .doesNotContain("platformId")
+        .doesNotContain("crossPlatformId")
+        .doesNotContain("nativeUserId")
+        .doesNotContain("sourceLogHash")
+        .doesNotContain("sourceFile");
+  }
+}

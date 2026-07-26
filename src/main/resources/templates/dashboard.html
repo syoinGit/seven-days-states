@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="60">
+  <title>7 Days 旅日記</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <p class="eyebrow">7 Days to Die Server</p>
+    <h1>旅日記</h1>
+    <p>いま誰が、どこで、何をしているか</p>
+  </div>
+  <div class="server-strip">
+    <span>FPS <strong th:text="${dashboard.serverState.fps ?: '-'}">-</strong></span>
+    <span>人数 <strong th:text="${dashboard.serverState.playerCount ?: '-'}">-</strong></span>
+    <span>ゾンビ <strong th:text="${dashboard.serverState.zombieCount ?: '-'}">-</strong></span>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="players-now" aria-label="players">
+    <article class="player-card" th:if="${#lists.isEmpty(dashboard.playerStatuses)}">
+      <div>
+        <h2>まだ誰も旅に出ていません</h2>
+        <p>ログとセーブデータが入ると、ここに現在地が表示されます。</p>
+      </div>
+    </article>
+    <article class="player-card" th:each="player : ${dashboard.playerStatuses}">
+      <div class="player-main">
+        <span class="status-dot" th:classappend="${player.online == false} ? ' offline'"></span>
+        <div>
+          <h2 th:text="${player.playerName}">player</h2>
+          <p>
+            <strong th:text="${player.poiName}">荒野のどこか</strong>
+            <span th:text="${player.online == false ? 'オフライン' : 'オンライン'}">オンライン</span>
+          </p>
+        </div>
+      </div>
+      <dl>
+        <div>
+          <dt>ワールド</dt>
+          <dd th:text="${player.worldName ?: '-'}">world</dd>
+        </div>
+        <div>
+          <dt>座標</dt>
+          <dd th:text="${player.coordinate ?: '-'}">-</dd>
+        </div>
+        <div>
+          <dt>更新</dt>
+          <dd th:text="${player.lastLogin ?: '-'}">-</dd>
+        </div>
+        <div>
+          <dt>HP</dt>
+          <dd th:text="${player.health ?: '-'}">-</dd>
+        </div>
+        <div>
+          <dt>レベル</dt>
+          <dd th:text="${player.level ?: '-'}">-</dd>
+        </div>
+        <div>
+          <dt>死亡 / Ping</dt>
+          <dd>
+            <span th:text="${player.deaths ?: '-'}">-</span>
+            <span> / </span>
+            <span th:text="${player.ping ?: '-'}">-</span>
+          </dd>
+        </div>
+      </dl>
+    </article>
+  </section>
+
+  <section class="main-grid">
+    <article class="panel timeline-panel">
+      <div class="panel-head">
+        <h2>いま起きていること</h2>
+      </div>
+      <ol class="timeline">
+        <li th:if="${#lists.isEmpty(dashboard.travelEntries)}" class="empty">
+          まだイベントログがありません。
+        </li>
+        <li th:each="entry : ${dashboard.travelEntries}">
+          <time th:text="${entry.occurredAt ?: '-'}">time</time>
+          <div>
+            <span class="tag" th:text="${entry.kind}">EVENT</span>
+            <p th:if="${!#strings.isEmpty(entry.poiName)}"
+               th:text="${entry.actor + 'が' + entry.poiName + 'で' + entry.actionText}">
+              誰かが荒野のどこかで何かした
+            </p>
+            <p th:if="${#strings.isEmpty(entry.poiName)}"
+               th:text="${entry.actor + 'が' + entry.actionText}">
+              誰かが何かした
+            </p>
+            <small th:if="${entry.detailText}" th:text="${entry.detailText}">detail</small>
+            <small th:if="${!#strings.isEmpty(entry.coordinate)}"
+                   th:text="${'（' + entry.coordinate + '）'}">position</small>
+          </div>
+        </li>
+      </ol>
+    </article>
+
+    <aside class="side-stack">
+      <article class="panel">
+        <div class="panel-head">
+          <h2>探索中の場所</h2>
+        </div>
+        <div class="poi-list">
+          <div th:if="${#lists.isEmpty(dashboard.poiStatuses)}" class="empty">まだ現在地がありません。</div>
+          <div class="poi-row" th:each="poi : ${dashboard.poiStatuses}">
+            <div>
+              <strong th:text="${poi.poiName}">poi</strong>
+              <span th:if="${poi.category}" th:text="${poi.category}">category</span>
+              <p>
+                <b th:text="${poi.playerName}">player</b>
+                <span>が探索中</span>
+              </p>
+            </div>
+            <small th:text="${poi.coordinate ?: '-'}">position</small>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <h2>討伐メモ</h2>
+        </div>
+        <table>
+          <thead>
+          <tr>
+            <th>プレイヤー</th>
+            <th class="num">討伐数</th>
+          </tr>
+          </thead>
+          <tbody>
+          <tr th:if="${#lists.isEmpty(dashboard.killLeaders)}">
+            <td colspan="2" class="empty">まだ討伐ログがありません。</td>
+          </tr>
+          <tr th:each="row : ${dashboard.killLeaders}">
+            <td th:text="${row.playerName}">player</td>
+            <td class="num" th:text="${#numbers.formatInteger(row.kills, 1, 'COMMA')}">0</td>
+          </tr>
+          </tbody>
+        </table>
+      </article>
+    </aside>
+  </section>
+</main>
+</body>
+</html>
