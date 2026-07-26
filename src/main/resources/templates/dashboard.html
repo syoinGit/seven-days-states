@@ -86,15 +86,9 @@
           <time th:text="${entry.occurredAt ?: '-'}">time</time>
           <div>
             <span class="tag" th:text="${entry.kind}">EVENT</span>
-            <p th:if="${!#strings.isEmpty(entry.poiName)}"
-               th:text="${entry.actor + 'が' + entry.poiName + 'で' + entry.actionText}">
+            <p th:text="${entry.message}">
               誰かが荒野のどこかで何かした
             </p>
-            <p th:if="${#strings.isEmpty(entry.poiName)}"
-               th:text="${entry.actor + 'が' + entry.actionText}">
-              誰かが何かした
-            </p>
-            <small th:if="${entry.detailText}" th:text="${entry.detailText}">detail</small>
             <small th:if="${!#strings.isEmpty(entry.coordinate)}"
                    th:text="${'（' + entry.coordinate + '）'}">position</small>
           </div>

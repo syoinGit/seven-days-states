@@ -45,6 +45,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 import javax.xml.XMLConstants;
@@ -524,15 +525,21 @@ public class SevenDaysDataImportService {
   private M_Player upsertPlayer(SourceReference source, Element element, LocalDateTime capturedAt, Counter counter) {
     String platform = required(element, "platform");
     String userId = required(element, "userid");
-    String playerKey = platform + ":" + userId;
-    M_Player player = playerRepository.findByPlayerKey(playerKey).orElseGet(M_Player::new);
+    String nativePlatform = blankToNull(element.getAttribute("nativeplatform"));
+    String nativeUserId = blankToNull(element.getAttribute("nativeuserid"));
+    String playerKey = PlayerIdentity.canonicalPlayerKey(platform, userId, nativePlatform, nativeUserId);
+    if (playerKey == null) {
+      playerKey = platform + ":" + userId;
+    }
+    M_Player player = findExistingPlayer(playerKey, platform, userId, nativePlatform, nativeUserId)
+        .orElseGet(M_Player::new);
     boolean created = player.getId() == null;
     player.setSourcePath(source.relativePath());
     player.setPlayerKey(playerKey);
     player.setPlatform(platform);
     player.setUserId(userId);
-    player.setNativePlatform(blankToNull(element.getAttribute("nativeplatform")));
-    player.setNativeUserId(blankToNull(element.getAttribute("nativeuserid")));
+    player.setNativePlatform(nativePlatform);
+    player.setNativeUserId(nativeUserId);
     player.setPlayerName(required(element, "playername"));
     if (created) {
       player.setFirstSeenAt(capturedAt);
@@ -541,6 +548,30 @@ public class SevenDaysDataImportService {
     M_Player saved = playerRepository.save(player);
     counter.players++;
     return saved;
+  }
+
+  private Optional<M_Player> findExistingPlayer(
+      String playerKey,
+      String platform,
+      String userId,
+      String nativePlatform,
+      String nativeUserId) {
+    List<String> candidateKeys = PlayerIdentity.candidatePlayerKeys(platform, userId, nativePlatform, nativeUserId);
+    if (!candidateKeys.contains(playerKey)) {
+      candidateKeys.addFirst(playerKey);
+    }
+    List<M_Player> byKey = playerRepository.findByPlayerKeyInOrderByIdAsc(candidateKeys);
+    if (!byKey.isEmpty()) {
+      return Optional.of(byKey.getFirst());
+    }
+    Optional<M_Player> byPlatformUser = playerRepository.findFirstByPlatformIgnoreCaseAndUserIdOrderByIdAsc(platform, userId);
+    if (byPlatformUser.isPresent()) {
+      return byPlatformUser;
+    }
+    if (nativePlatform != null && nativeUserId != null) {
+      return playerRepository.findFirstByNativePlatformIgnoreCaseAndNativeUserIdOrderByIdAsc(nativePlatform, nativeUserId);
+    }
+    return Optional.empty();
   }
 
   private void savePlayerStateSnapshot(

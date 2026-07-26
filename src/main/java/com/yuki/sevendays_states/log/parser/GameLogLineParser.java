@@ -4,6 +4,7 @@ import com.yuki.sevendays_states.log.dto.ParsedLogLine;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -19,7 +20,7 @@ public class GameLogLineParser {
   private final ZoneId zoneId;
 
   public GameLogLineParser() {
-    this(ZoneId.systemDefault());
+    this(ZoneOffset.UTC);
   }
 
   public GameLogLineParser(ZoneId zoneId) {

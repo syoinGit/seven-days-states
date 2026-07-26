@@ -6,6 +6,6 @@ cd "$ROOT_DIR"
 
 ./mvnw clean package
 mkdir -p app
-cp target/sevendays-states-0.0.1-SNAPSHOT.jar app/sevendays-states.jar
+cp target/sevendays-states-0.0.1-SNAPSHOT.jar app/app.jar
 
-echo "Built app/sevendays-states.jar"
+echo "Built app/app.jar"

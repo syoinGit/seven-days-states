@@ -1,8 +1,6 @@
 package com.yuki.sevendays_states.web;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
-import java.time.OffsetDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -14,6 +12,8 @@ public class DashboardViewService {
 
   private final JdbcTemplate jdbcTemplate;
   private final PoiNameService poiNameService;
+  private final EventMessageFormatter eventMessageFormatter;
+  private final DisplayTimeFormatter displayTimeFormatter = new DisplayTimeFormatter();
 
   public DashboardView dashboard() {
     return new DashboardView(
@@ -26,10 +26,88 @@ public class DashboardViewService {
 
   private List<PlayerStatus> playerStatuses() {
     return jdbcTemplate.query("""
+        with player_identity as (
+          select p.*,
+                 case
+                   when upper(p.platform) = 'EOS' then 'EOS:' || replace(p.user_id, 'EOS_', '')
+                   when p.user_id like 'EOS_%' then 'EOS:' || replace(p.user_id, 'EOS_', '')
+                   when upper(coalesce(p.native_platform, '')) = 'EOS' then 'EOS:' || replace(p.native_user_id, 'EOS_', '')
+                   when p.native_user_id like 'EOS_%' then 'EOS:' || replace(p.native_user_id, 'EOS_', '')
+                 end as eos_key,
+                 case
+                   when upper(p.platform) = 'STEAM' then 'Steam:' || replace(p.user_id, 'Steam_', '')
+                   when p.user_id like 'Steam_%' then 'Steam:' || replace(p.user_id, 'Steam_', '')
+                   when upper(coalesce(p.native_platform, '')) = 'STEAM' then 'Steam:' || replace(p.native_user_id, 'Steam_', '')
+                   when p.native_user_id like 'Steam_%' then 'Steam:' || replace(p.native_user_id, 'Steam_', '')
+                 end as steam_key
+          from m_player p
+        ),
+        deduped_players as (
+          select p.*
+          from player_identity p
+          where not exists (
+            select 1
+            from player_identity newer
+            where newer.id <> p.id
+              and (
+                (p.eos_key is not null and p.eos_key = newer.eos_key)
+                or (p.steam_key is not null and p.steam_key = newer.steam_key)
+                or p.player_key = newer.player_key
+              )
+              and (
+                coalesce(newer.last_seen_at, timestamp '0001-01-01 00:00:00')
+                  > coalesce(p.last_seen_at, timestamp '0001-01-01 00:00:00')
+                or (
+                  coalesce(newer.last_seen_at, timestamp '0001-01-01 00:00:00')
+                    = coalesce(p.last_seen_at, timestamp '0001-01-01 00:00:00')
+                  and newer.id > p.id
+                )
+              )
+          )
+        ),
+        latest_snapshot as (
+          select *
+          from (
+            select s.*,
+                   row_number() over (partition by player_id order by captured_at desc, id desc) as snapshot_rank
+            from t_player_state_snapshot s
+          ) ranked_snapshot
+          where snapshot_rank = 1
+        ),
+        latest_current_state as (
+          select *
+          from (
+            select c.*,
+                   case
+                     when c.cross_platform_id is not null and c.cross_platform_id <> '' then 'EOS:' || replace(c.cross_platform_id, 'EOS_', '')
+                     when c.platform_id is not null and c.platform_id <> '' then 'Steam:' || replace(c.platform_id, 'Steam_', '')
+                     else 'ENTITY:' || c.player_entity_id
+                   end as state_player_key,
+                   row_number() over (
+                     partition by case
+                       when c.cross_platform_id is not null and c.cross_platform_id <> '' then 'EOS:' || replace(c.cross_platform_id, 'EOS_', '')
+                       when c.platform_id is not null and c.platform_id <> '' then 'Steam:' || replace(c.platform_id, 'Steam_', '')
+                       else 'ENTITY:' || c.player_entity_id
+                     end
+                     order by c.online desc, c.last_updated desc
+                   ) as state_rank
+            from t_player_current_state c
+          ) ranked_state
+          where state_rank = 1
+        ),
+        latest_position as (
+          select player_name, occurred_at, position_x, position_y, position_z
+          from (
+            select player_name, occurred_at, position_x, position_y, position_z,
+                   row_number() over (partition by player_name order by occurred_at desc) as position_rank
+            from t_player_position_transaction
+          ) ranked_position
+          where position_rank = 1
+        )
         select p.player_name,
                s.world_name,
                s.game_name,
-	               coalesce(c.last_updated, pp.occurred_at, s.last_login) as last_login,
+               coalesce(c.last_updated, pp.occurred_at, s.last_login) as last_login,
                coalesce(c.position_x, pp.position_x, s.x) as x,
                coalesce(c.position_y, pp.position_y, s.y) as y,
                coalesce(c.position_z, pp.position_z, s.z) as z,
@@ -43,8 +121,8 @@ public class DashboardViewService {
                  from m_world_poi poi
                  where coalesce(poi.category, '') <> 'part'
                    and poi.poi_name not like 'part_%'
-	                 order by ((poi.x - coalesce(c.position_x, pp.position_x, s.x)) * (poi.x - coalesce(c.position_x, pp.position_x, s.x))
-	                       + (poi.z - coalesce(c.position_z, pp.position_z, s.z)) * (poi.z - coalesce(c.position_z, pp.position_z, s.z)))
+                   order by ((poi.x - coalesce(c.position_x, pp.position_x, s.x)) * (poi.x - coalesce(c.position_x, pp.position_x, s.x))
+                         + (poi.z - coalesce(c.position_z, pp.position_z, s.z)) * (poi.z - coalesce(c.position_z, pp.position_z, s.z)))
                  limit 1
                ) as poi_name,
                (
@@ -52,23 +130,15 @@ public class DashboardViewService {
                  from m_world_poi poi
                  where coalesce(poi.category, '') <> 'part'
                    and poi.poi_name not like 'part_%'
-	                 order by ((poi.x - coalesce(c.position_x, pp.position_x, s.x)) * (poi.x - coalesce(c.position_x, pp.position_x, s.x))
-	                       + (poi.z - coalesce(c.position_z, pp.position_z, s.z)) * (poi.z - coalesce(c.position_z, pp.position_z, s.z)))
+                   order by ((poi.x - coalesce(c.position_x, pp.position_x, s.x)) * (poi.x - coalesce(c.position_x, pp.position_x, s.x))
+                         + (poi.z - coalesce(c.position_z, pp.position_z, s.z)) * (poi.z - coalesce(c.position_z, pp.position_z, s.z)))
                  limit 1
                ) as poi_category
-	        from m_player p
-	        left join t_player_state_snapshot s on s.player_id = p.id
-	        left join t_player_current_state c on c.player_name = p.player_name
-	        left join (
-          select player_name, occurred_at, position_x, position_y, position_z
-          from (
-            select player_name, occurred_at, position_x, position_y, position_z,
-                   row_number() over (partition by player_name order by occurred_at desc) as position_rank
-            from t_player_position_transaction
-          ) ranked_position
-          where position_rank = 1
-        ) pp on pp.player_name = p.player_name
-	        order by coalesce(c.last_updated, pp.occurred_at, s.captured_at) desc nulls last, p.player_name
+        from deduped_players p
+        left join latest_snapshot s on s.player_id = p.id
+        left join latest_current_state c on c.state_player_key in (p.eos_key, p.steam_key, p.player_key)
+        left join latest_position pp on pp.player_name = p.player_name
+        order by coalesce(c.last_updated, pp.occurred_at, s.captured_at) desc nulls last, p.player_name
         limit 12
         """, (rs, rowNum) -> new PlayerStatus(
         rs.getString("player_name"),
@@ -194,6 +264,12 @@ public class DashboardViewService {
         displayPlayer(rs.getString("player_name")),
         rs.getString("action_text"),
         rs.getString("detail_text"),
+        eventMessageFormatter.format(
+            rs.getString("kind"),
+            displayPlayer(rs.getString("player_name")),
+            rs.getString("action_text"),
+            rs.getString("detail_text"),
+            displayEventPoi(rs.getString("poi_name"))),
         displayEventPoi(rs.getString("poi_name")),
         coordinate(rs.getObject("x"), rs.getObject("y"), rs.getObject("z"))));
   }
@@ -317,16 +393,7 @@ public class DashboardViewService {
   }
 
   private String toDisplayTime(Object value) {
-    if (value == null) {
-      return "";
-    }
-    if (value instanceof OffsetDateTime dateTime) {
-      return dateTime.toLocalDateTime().toString().replace('T', ' ');
-    }
-    if (value instanceof Timestamp timestamp) {
-      return timestamp.toLocalDateTime().toString().replace('T', ' ');
-    }
-    return value.toString().replace('T', ' ');
+    return displayTimeFormatter.format(value);
   }
 
   public record DashboardView(
@@ -360,6 +427,7 @@ public class DashboardViewService {
       String actor,
       String actionText,
       String detailText,
+      String message,
       String poiName,
       String coordinate
   ) {
