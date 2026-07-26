@@ -60,6 +60,11 @@ class DashboardViewServiceTests {
         (player_entity_id, player_name, position_x, position_y, position_z, platform_id, cross_platform_id, online, last_updated)
         values (331, 'PlayerNew', 12, 22, 32, 'Steam_76561198382915826', 'EOS_00024b5c4d2546468b7c6775bd927c32', true, timestamp with time zone '2026-07-26 01:30:00+00:00')
         """);
+    jdbcTemplate.update("""
+        insert into t_player_current_state
+        (player_entity_id, player_name, position_x, position_y, position_z, platform_id, cross_platform_id, online, last_updated)
+        values (332, 'PlayerNew', 13, 23, 33, 'Steam_76561198382915826', null, true, timestamp with time zone '2026-07-26 01:00:00+00:00')
+        """);
 
     DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
 

@@ -103,42 +103,54 @@ public class DashboardViewService {
             from t_player_position_transaction
           ) ranked_position
           where position_rank = 1
+        ),
+        status_rows as (
+          select p.id as player_id,
+                 p.player_name,
+                 s.world_name,
+                 s.game_name,
+                 coalesce(c.last_updated, pp.occurred_at, s.last_login) as last_login,
+                 coalesce(c.position_x, pp.position_x, s.x) as x,
+                 coalesce(c.position_y, pp.position_y, s.y) as y,
+                 coalesce(c.position_z, pp.position_z, s.z) as z,
+                 c.health,
+                 c.deaths,
+                 c.level,
+                 c.ping,
+                 c.online,
+                 (
+                   select poi.poi_name
+                   from m_world_poi poi
+                   where coalesce(poi.category, '') <> 'part'
+                     and poi.poi_name not like 'part_%'
+                   order by ((poi.x - coalesce(c.position_x, pp.position_x, s.x)) * (poi.x - coalesce(c.position_x, pp.position_x, s.x))
+                         + (poi.z - coalesce(c.position_z, pp.position_z, s.z)) * (poi.z - coalesce(c.position_z, pp.position_z, s.z)))
+                   limit 1
+                 ) as poi_name,
+                 (
+                   select poi.category
+                   from m_world_poi poi
+                   where coalesce(poi.category, '') <> 'part'
+                     and poi.poi_name not like 'part_%'
+                   order by ((poi.x - coalesce(c.position_x, pp.position_x, s.x)) * (poi.x - coalesce(c.position_x, pp.position_x, s.x))
+                         + (poi.z - coalesce(c.position_z, pp.position_z, s.z)) * (poi.z - coalesce(c.position_z, pp.position_z, s.z)))
+                   limit 1
+                 ) as poi_category,
+                 row_number() over (
+                   partition by p.id
+                   order by c.online desc nulls last,
+                            coalesce(c.last_updated, pp.occurred_at, s.captured_at) desc nulls last
+                 ) as card_rank
+          from deduped_players p
+          left join latest_snapshot s on s.player_id = p.id
+          left join latest_current_state c on c.state_player_key in (p.eos_key, p.steam_key, p.player_key)
+          left join latest_position pp on pp.player_name = p.player_name
         )
-        select p.player_name,
-               s.world_name,
-               s.game_name,
-               coalesce(c.last_updated, pp.occurred_at, s.last_login) as last_login,
-               coalesce(c.position_x, pp.position_x, s.x) as x,
-               coalesce(c.position_y, pp.position_y, s.y) as y,
-               coalesce(c.position_z, pp.position_z, s.z) as z,
-               c.health,
-               c.deaths,
-               c.level,
-               c.ping,
-               c.online,
-               (
-                 select poi.poi_name
-                 from m_world_poi poi
-                 where coalesce(poi.category, '') <> 'part'
-                   and poi.poi_name not like 'part_%'
-                   order by ((poi.x - coalesce(c.position_x, pp.position_x, s.x)) * (poi.x - coalesce(c.position_x, pp.position_x, s.x))
-                         + (poi.z - coalesce(c.position_z, pp.position_z, s.z)) * (poi.z - coalesce(c.position_z, pp.position_z, s.z)))
-                 limit 1
-               ) as poi_name,
-               (
-                 select poi.category
-                 from m_world_poi poi
-                 where coalesce(poi.category, '') <> 'part'
-                   and poi.poi_name not like 'part_%'
-                   order by ((poi.x - coalesce(c.position_x, pp.position_x, s.x)) * (poi.x - coalesce(c.position_x, pp.position_x, s.x))
-                         + (poi.z - coalesce(c.position_z, pp.position_z, s.z)) * (poi.z - coalesce(c.position_z, pp.position_z, s.z)))
-                 limit 1
-               ) as poi_category
-        from deduped_players p
-        left join latest_snapshot s on s.player_id = p.id
-        left join latest_current_state c on c.state_player_key in (p.eos_key, p.steam_key, p.player_key)
-        left join latest_position pp on pp.player_name = p.player_name
-        order by coalesce(c.last_updated, pp.occurred_at, s.captured_at) desc nulls last, p.player_name
+        select player_name, world_name, game_name, last_login, x, y, z,
+               health, deaths, level, ping, online, poi_name, poi_category
+        from status_rows
+        where card_rank = 1
+        order by last_login desc nulls last, player_name
         limit 12
         """, (rs, rowNum) -> new PlayerStatus(
         rs.getString("player_name"),

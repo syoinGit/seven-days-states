@@ -583,8 +583,9 @@ public class SevenDaysDataImportService {
       String gameName,
       LocalDateTime capturedAt,
       Counter counter) {
-    String hash = sha256("player-state|" + source.sourceHash() + "|" + player.getPlayerKey() + "|"
-        + element.getAttribute("lastlogin") + "|" + element.getAttribute("position"));
+    String hash = sha256("player-state|" + source.relativePath() + "|" + player.getPlayerKey() + "|"
+        + worldName + "|" + gameName + "|" + element.getAttribute("lastlogin") + "|"
+        + element.getAttribute("position"));
     if (playerStateSnapshotRepository.existsBySourceHash(hash)) {
       return;
     }

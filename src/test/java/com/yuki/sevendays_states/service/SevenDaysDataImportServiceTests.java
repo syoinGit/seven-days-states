@@ -6,6 +6,8 @@ import com.yuki.sevendays_states.repository.T_PlayerMarkerSnapshotRepository;
 import com.yuki.sevendays_states.repository.T_PlayerStateSnapshotRepository;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -61,6 +63,23 @@ class SevenDaysDataImportServiceTests {
     assertThat(playerRepository.findAll())
         .extracting(player -> player.getPlayerKey() + ":" + player.getPlayerName())
         .containsExactly("EOS:00024b5c4d2546468b7c6775bd927c32:魅惑のこし餡ぼでぃ");
+  }
+
+  @Test
+  void importingSamePlayerStateWithDifferentFileModifiedTimeDoesNotIncreaseSnapshots() throws Exception {
+    String playerXml = """
+        <player platform="EOS" userid="00024b5c4d2546468b7c6775bd927c32" nativeplatform="Steam" nativeuserid="76561198382915826" playername="魅惑のこし餡ぼでぃ" playgroup="Standalone" lastlogin="2026-07-25 22:45:07" position="464,47,-602" />
+        """;
+    writePlayersXml(playerXml);
+    Files.setLastModifiedTime(GAME_DIR.resolve("players.xml"), FileTime.from(Instant.parse("2026-07-26T01:00:00Z")));
+    importService.importCurrentData();
+
+    writePlayersXml(playerXml);
+    Files.setLastModifiedTime(GAME_DIR.resolve("players.xml"), FileTime.from(Instant.parse("2026-07-26T02:00:00Z")));
+    importService.importCurrentData();
+
+    assertThat(playerRepository.count()).isEqualTo(1);
+    assertThat(playerStateSnapshotRepository.count()).isEqualTo(1);
   }
 
   @Test
