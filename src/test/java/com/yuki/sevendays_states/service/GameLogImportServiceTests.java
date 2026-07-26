@@ -380,6 +380,29 @@ class GameLogImportServiceTests {
         .containsExactly("PlayerA:76:1:true");
   }
 
+  @Test
+  void importsRawTelnetPlayerListWithMultiplePlayersAfterOneCommandLine() {
+    List<String> telnetLines = SevenDaysTelnetService.normalizeLpOutput(List.of(
+        "lp",
+        "Executing command 'lp' by Telnet from 172.18.0.1:32864",
+        "0. id=101, PlayerA, pos=(-532.0, 48.0, -446.1), rot=(-4.2, 369.8, 0.0), remote=True, health=76, deaths=1, zombies=8, players=0, score=8, level=2, pltfmid=Steam_a, crossid=EOS_a, ip=10.0.0.1, ping=7",
+        "1. id=202, PlayerB, pos=(10.0, 55.0, 20.1), rot=(0.0, 180.0, 0.0), remote=True, health=99, deaths=0, zombies=2, players=0, score=2, level=1, pltfmid=Steam_b, crossid=EOS_b, ip=10.0.0.2, ping=12",
+        "2. id=303, PlayerC, pos=(30.0, 60.0, -40.1), rot=(1.0, 90.0, 0.0), remote=True, health=45, deaths=2, zombies=12, players=0, score=12, level=4, pltfmid=Steam_c, crossid=EOS_c, ip=10.0.0.3, ping=20",
+        "Total of 3 in the game"
+    ), LocalDateTime.of(2026, 7, 26, 10, 53, 10));
+
+    GameLogImportResult result = logImportService.importLogLines("telnet:lp", telnetLines);
+
+    assertThat(result.malformedLines()).isZero();
+    assertThat(playerCurrentStateRepository.findAll())
+        .extracting(row -> row.getPlayerName() + ":" + row.getHealth() + ":" + row.getPositionX()
+            + ":" + row.getPositionZ() + ":" + row.isOnline())
+        .containsExactlyInAnyOrder(
+            "PlayerA:76:-532:-446:true",
+            "PlayerB:99:10:20:true",
+            "PlayerC:45:30:-40:true");
+  }
+
   private Path writeLog(String content) throws Exception {
     Path file = tempDir.resolve("log");
     Files.writeString(file, content);
