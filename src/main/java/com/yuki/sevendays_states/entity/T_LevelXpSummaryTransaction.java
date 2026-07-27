@@ -33,6 +33,9 @@ public class T_LevelXpSummaryTransaction {
   @Column(name = "player_entity_id")
   private Integer playerEntityId;
 
+  @Column(name = "player_id")
+  private Long playerId;
+
   @Column(name = "player_inference_method", length = 80)
   private String playerInferenceMethod;
 

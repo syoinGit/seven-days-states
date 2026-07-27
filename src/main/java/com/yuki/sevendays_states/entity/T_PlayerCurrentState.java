@@ -21,6 +21,9 @@ public class T_PlayerCurrentState {
   @Column(name = "player_entity_id")
   private Integer playerEntityId;
 
+  @Column(name = "player_id")
+  private Long playerId;
+
   @Column(name = "player_name", nullable = false, columnDefinition = "TEXT")
   private String playerName;
 

@@ -33,6 +33,9 @@ public class T_EntityKillTransaction {
   @Column(name = "player_entity_id", nullable = false)
   private Integer playerEntityId;
 
+  @Column(name = "player_id")
+  private Long playerId;
+
   @Column(name = "target_entity_type", nullable = false, columnDefinition = "TEXT")
   private String targetEntityType;
 

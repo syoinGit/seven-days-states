@@ -33,6 +33,9 @@ public class T_PlayerPositionTransaction {
   @Column(name = "player_entity_id", nullable = false)
   private Integer playerEntityId;
 
+  @Column(name = "player_id")
+  private Long playerId;
+
   @Column(name = "position_x", nullable = false)
   private Integer positionX;
 

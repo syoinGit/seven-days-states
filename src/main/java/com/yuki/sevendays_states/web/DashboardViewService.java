@@ -90,11 +90,14 @@ public class DashboardViewService {
                      else 'ENTITY:' || c.player_entity_id
                    end as state_player_key,
                    row_number() over (
-                     partition by case
-                       when c.cross_platform_id is not null and c.cross_platform_id <> '' then 'EOS:' || replace(c.cross_platform_id, 'EOS_', '')
-                       when c.platform_id is not null and c.platform_id <> '' then 'Steam:' || replace(c.platform_id, 'Steam_', '')
-                       else 'ENTITY:' || c.player_entity_id
-                     end
+                     partition by coalesce(
+                       'PLAYER:' || c.player_id,
+                       case
+                         when c.cross_platform_id is not null and c.cross_platform_id <> '' then 'EOS:' || replace(c.cross_platform_id, 'EOS_', '')
+                         when c.platform_id is not null and c.platform_id <> '' then 'Steam:' || replace(c.platform_id, 'Steam_', '')
+                         else 'ENTITY:' || c.player_entity_id
+                       end
+                     )
                      order by c.last_updated desc, c.online desc
                    ) as state_rank
             from t_player_current_state c
@@ -102,10 +105,13 @@ public class DashboardViewService {
           where state_rank = 1
         ),
         latest_position as (
-          select player_name, occurred_at, position_x, position_y, position_z
+          select player_id, player_name, occurred_at, position_x, position_y, position_z
           from (
-            select player_name, occurred_at, position_x, position_y, position_z,
-                   row_number() over (partition by player_name order by occurred_at desc) as position_rank
+            select player_id, player_name, occurred_at, position_x, position_y, position_z,
+                   row_number() over (
+                     partition by coalesce('PLAYER:' || player_id, player_name)
+                     order by occurred_at desc
+                   ) as position_rank
             from t_player_position_transaction
           ) ranked_position
           where position_rank = 1
@@ -152,8 +158,10 @@ public class DashboardViewService {
                  ) as card_rank
           from deduped_players p
           left join latest_snapshot s on s.player_id = p.id
-          left join latest_current_state c on c.state_player_key in (p.eos_key, p.steam_key, p.player_key)
-          left join latest_position pp on pp.player_name = p.player_name
+          left join latest_current_state c on c.player_id = p.id
+              or (c.player_id is null and c.state_player_key in (p.eos_key, p.steam_key, p.player_key))
+          left join latest_position pp on pp.player_id = p.id
+              or (pp.player_id is null and pp.player_name = p.player_name)
         )
         select player_name, world_name, game_name, last_login, x, y, z,
                health, deaths, level, ping, online, poi_name, poi_category

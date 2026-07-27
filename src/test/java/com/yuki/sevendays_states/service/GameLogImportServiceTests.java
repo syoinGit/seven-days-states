@@ -1,5 +1,6 @@
 package com.yuki.sevendays_states.service;
 
+import com.yuki.sevendays_states.repository.M_PlayerRepository;
 import com.yuki.sevendays_states.repository.T_EntityKillTransactionRepository;
 import com.yuki.sevendays_states.repository.T_LevelXpSummaryTransactionRepository;
 import com.yuki.sevendays_states.repository.T_PlayerCurrentStateRepository;
@@ -37,6 +38,9 @@ class GameLogImportServiceTests {
   private GameLogImportService logImportService;
 
   @Autowired
+  private M_PlayerRepository playerRepository;
+
+  @Autowired
   private T_PlayerJoinTransactionRepository playerJoinRepository;
 
   @Autowired
@@ -70,6 +74,7 @@ class GameLogImportServiceTests {
     levelXpSummaryRepository.deleteAll();
     sleeperRepository.deleteAll();
     serverMetricRepository.deleteAll();
+    playerRepository.deleteAll();
   }
 
   @Test
@@ -359,8 +364,8 @@ class GameLogImportServiceTests {
 
     assertThat(playerCurrentStateRepository.findAll())
         .extracting(row -> row.getPlayerEntityId() + ":" + row.getPlayerName() + ":" + row.getHealth() + ":" + row.getLevel()
-            + ":" + row.getPositionX() + ":" + row.getPing() + ":" + row.isOnline())
-        .containsExactly("303:PlayerA:77:3:-520:11:true");
+            + ":" + row.getPositionX() + ":" + row.getPing() + ":" + row.isOnline() + ":" + row.getPlayerId())
+        .containsExactly("303:PlayerA:77:3:-520:11:true:" + playerRepository.findByPlayerKey("EOS:a").orElseThrow().getId());
   }
 
   @Test
@@ -376,8 +381,9 @@ class GameLogImportServiceTests {
 
     assertThat(result.malformedLines()).isZero();
     assertThat(playerCurrentStateRepository.findAll())
-        .extracting(row -> row.getPlayerName() + ":" + row.getHealth() + ":" + row.getDeaths() + ":" + row.isOnline())
-        .containsExactly("PlayerA:76:1:true");
+        .extracting(row -> row.getPlayerName() + ":" + row.getHealth() + ":" + row.getDeaths() + ":" + row.isOnline()
+            + ":" + row.getPlayerId())
+        .containsExactly("PlayerA:76:1:true:" + playerRepository.findByPlayerKey("EOS:a").orElseThrow().getId());
   }
 
   @Test
@@ -401,6 +407,30 @@ class GameLogImportServiceTests {
             "PlayerA:76:-532:-446:true",
             "PlayerB:99:10:20:true",
             "PlayerC:45:30:-40:true");
+  }
+
+  @Test
+  void importsObservedMultiPlayerTelnetPlayerListAndLinksMasterPlayers() {
+    GameLogImportResult result = logImportService.importLogLines("telnet:lp", List.of(
+        "lp",
+        "2026-07-27T11:31:26 3921.931 INF Executing command 'lp' by Telnet from 172.18.0.1:40132",
+        "0. id=171, 魅惑のこし餡ぼでぃ, pos=(581.7, 40.0, -538.9), rot=(-46.4, -73.1, 0.0), remote=True, health=115, deaths=1, zombies=226, players=0, score=196, level=15, pltfmid=Steam_76561198382915826, crossid=EOS_00024b5c4d2546468b7c6775bd927c32, ip=219.107.140.192, ping=5",
+        "1. id=485, hosi42861, pos=(545.7, 38.9, -549.8), rot=(-2.3, -319.7, 0.0), remote=True, health=108, deaths=1, zombies=16, players=0, score=11, level=8, pltfmid=Steam_76561199276022302, crossid=EOS_0002d3425415470e9632296116cbcc0d, ip=122.131.33.98, ping=5",
+        "Total of 2 in the game"
+    ));
+
+    assertThat(result.playerListPositions()).isEqualTo(2);
+    assertThat(playerRepository.findAll())
+        .extracting(player -> player.getPlayerKey() + ":" + player.getPlayerName())
+        .containsExactlyInAnyOrder(
+            "EOS:00024b5c4d2546468b7c6775bd927c32:魅惑のこし餡ぼでぃ",
+            "EOS:0002d3425415470e9632296116cbcc0d:hosi42861");
+    assertThat(playerCurrentStateRepository.findAll())
+        .allSatisfy(currentState -> assertThat(currentState.getPlayerId()).isNotNull())
+        .extracting(row -> row.getPlayerName() + ":" + row.getHealth() + ":" + row.getLevel() + ":" + row.isOnline())
+        .containsExactlyInAnyOrder(
+            "魅惑のこし餡ぼでぃ:115:15:true",
+            "hosi42861:108:8:true");
   }
 
   private Path writeLog(String content) throws Exception {

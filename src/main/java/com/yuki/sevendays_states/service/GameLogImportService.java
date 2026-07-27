@@ -1,6 +1,7 @@
 package com.yuki.sevendays_states.service;
 
 import com.yuki.sevendays_states.config.SevenDaysDataProperties;
+import com.yuki.sevendays_states.entity.M_Player;
 import com.yuki.sevendays_states.entity.T_EntityKillTransaction;
 import com.yuki.sevendays_states.entity.T_LevelXpSummaryTransaction;
 import com.yuki.sevendays_states.entity.T_PlayerCurrentState;
@@ -26,6 +27,7 @@ import com.yuki.sevendays_states.log.parser.PlayerListPositionLogParser;
 import com.yuki.sevendays_states.log.parser.ServerMetricLogParser;
 import com.yuki.sevendays_states.log.parser.SleeperRestoreLogParser;
 import com.yuki.sevendays_states.log.parser.SleeperSpawnLogParser;
+import com.yuki.sevendays_states.repository.M_PlayerRepository;
 import com.yuki.sevendays_states.repository.T_EntityKillTransactionRepository;
 import com.yuki.sevendays_states.repository.T_LevelXpSummaryTransactionRepository;
 import com.yuki.sevendays_states.repository.T_PlayerCurrentStateRepository;
@@ -39,7 +41,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
@@ -66,6 +70,7 @@ public class GameLogImportService {
   private static final int MIN_PLAYER_POSITION_INFERENCE_DISTANCE_ADVANTAGE = 50;
 
   private final SevenDaysDataProperties properties;
+  private final M_PlayerRepository playerRepository;
   private final T_PlayerCurrentStateRepository playerCurrentStateRepository;
   private final T_PlayerJoinTransactionRepository playerJoinRepository;
   private final T_PlayerLeaveTransactionRepository playerLeaveRepository;
@@ -182,8 +187,8 @@ public class GameLogImportService {
   private void parseSingleLine(String sourceFile, ParsedLogLine line, LogImportContext context, Counter counter) {
     Optional<PlayerJoinLogEvent> join = playerJoinParser.parse(line);
     if (join.isPresent()) {
-      savePlayerJoin(sourceFile, join.get(), counter);
-      context.playerJoined(join.get());
+      Long playerId = savePlayerJoin(sourceFile, join.get(), counter);
+      context.playerJoined(join.get(), playerId);
       return;
     }
     Optional<PlayerLeaveLogEvent> leave = playerLeaveParser.parse(line);
@@ -210,26 +215,31 @@ public class GameLogImportService {
     serverMetricParser.parse(line).ifPresent(metric -> saveServerMetric(sourceFile, metric, counter));
   }
 
-  private void savePlayerJoin(String sourceFile, PlayerJoinLogEvent event, Counter counter) {
+  private Long savePlayerJoin(String sourceFile, PlayerJoinLogEvent event, Counter counter) {
     String hash = lineHash(sourceFile, event.occurredAt().toString(), event.rawLine());
+    M_Player player = upsertPlayerMaster(
+        event.playerName(), event.platformId(), event.crossPlatformId(), event.occurredAt());
+    Long playerId = player == null ? null : player.getId();
     savePlayerPosition(
         sourceFile,
         hash,
         event.occurredAt(),
         event.playerName(),
         event.playerEntityId(),
+        playerId,
         event.positionX(),
         event.positionY(),
         event.positionZ(),
         "PLAYER_JOIN",
         "direct_log_position");
     if (playerJoinRepository.existsBySourceLogHash(hash)) {
-      return;
+      return playerId;
     }
     T_PlayerJoinTransaction row = new T_PlayerJoinTransaction();
     row.setOccurredAt(event.occurredAt());
     row.setPlayerName(event.playerName());
     row.setPlayerEntityId(event.playerEntityId());
+    row.setPlayerId(playerId);
     row.setPlatformId(event.platformId());
     row.setCrossPlatformId(event.crossPlatformId());
     row.setPositionX(event.positionX());
@@ -241,10 +251,13 @@ public class GameLogImportService {
     row.setSourceLogHash(hash);
     playerJoinRepository.save(row);
     counter.playerJoins++;
+    return playerId;
   }
 
   private void savePlayerLeave(String sourceFile, PlayerLeaveLogEvent event, Counter counter) {
     String hash = lineHash(sourceFile, event.occurredAt().toString(), event.rawLine());
+    M_Player player = upsertPlayerMaster(
+        event.playerName(), event.platformId(), event.crossPlatformId(), event.occurredAt());
     if (playerLeaveRepository.existsBySourceLogHash(hash)) {
       return;
     }
@@ -252,6 +265,7 @@ public class GameLogImportService {
     row.setOccurredAt(event.occurredAt());
     row.setPlayerName(event.playerName());
     row.setPlayerEntityId(event.playerEntityId());
+    row.setPlayerId(player == null ? null : player.getId());
     row.setPlatformId(event.platformId());
     row.setCrossPlatformId(event.crossPlatformId());
     row.setClientNumber(event.clientNumber());
@@ -274,6 +288,7 @@ public class GameLogImportService {
     row.setTargetEntityId(event.targetEntityId());
     playerCurrentStateRepository.findById(event.playerEntityId()).filter(currentState ->
         isFreshCurrentState(currentState, event.occurredAt())).ifPresent(currentState -> {
+      row.setPlayerId(currentState.getPlayerId());
       row.setPlayerPositionX(currentState.getPositionX());
       row.setPlayerPositionY(currentState.getPositionY());
       row.setPlayerPositionZ(currentState.getPositionZ());
@@ -326,6 +341,7 @@ public class GameLogImportService {
               event.occurredAt(),
               player.playerName(),
               player.playerEntityId(),
+              player.playerId(),
               event.positionX(),
               event.positionY(),
               event.positionZ(),
@@ -353,6 +369,7 @@ public class GameLogImportService {
     inferredPlayer.ifPresent(player -> {
       row.setPlayerName(player.playerName());
       row.setPlayerEntityId(player.playerEntityId());
+      row.setPlayerId(player.playerId());
       row.setPlayerInferenceMethod(player.inferenceMethod());
       row.setPlayerPositionX(player.x());
       row.setPlayerPositionY(player.y());
@@ -370,6 +387,7 @@ public class GameLogImportService {
             event.occurredAt(),
             player.playerName(),
             player.playerEntityId(),
+            player.playerId(),
             event.positionX(),
             event.positionY(),
             event.positionZ(),
@@ -394,6 +412,7 @@ public class GameLogImportService {
     ActivePlayer player = inferredPlayer.get();
     row.setPlayerName(player.playerName());
     row.setPlayerEntityId(player.playerEntityId());
+    row.setPlayerId(player.playerId());
     row.setPlayerInferenceMethod(player.inferenceMethod());
     row.setPlayerPositionX(player.x());
     row.setPlayerPositionY(player.y());
@@ -409,6 +428,7 @@ public class GameLogImportService {
         .map(player -> new ActivePlayerDistance(new ActivePlayer(
             player.getPlayerName(),
             player.getPlayerEntityId(),
+            player.getPlayerId(),
             player.getLastUpdated(),
             player.getPositionX(),
             player.getPositionY(),
@@ -446,6 +466,9 @@ public class GameLogImportService {
       LogImportContext context,
       Counter counter) {
     for (PlayerListPositionLogEvent.PlayerPosition player : event.players()) {
+      M_Player playerMaster = upsertPlayerMaster(
+          player.playerName(), player.platformId(), player.crossPlatformId(), event.occurredAt());
+      Long playerId = playerMaster == null ? null : playerMaster.getId();
       String hash = lineHash(sourceFile, event.occurredAt() + "|LP|" + player.playerEntityId(), player.rawLine());
       savePlayerPosition(
           sourceFile,
@@ -453,13 +476,14 @@ public class GameLogImportService {
           event.occurredAt(),
           player.playerName(),
           player.playerEntityId(),
+          playerId,
           player.positionX(),
           player.positionY(),
           player.positionZ(),
           "LP_COMMAND",
           "direct_telnet_lp");
-      context.playerPositionObserved(player, event.occurredAt());
-      upsertPlayerCurrentState(event.occurredAt(), player);
+      context.playerPositionObserved(player, playerId, event.occurredAt());
+      upsertPlayerCurrentState(event.occurredAt(), player, playerId);
     }
     counter.playerListPositions += event.players().size();
     markMissingCurrentStatePlayersOffline(event.occurredAt(), event.players());
@@ -467,8 +491,9 @@ public class GameLogImportService {
 
   private void upsertPlayerCurrentState(
       OffsetDateTime occurredAt,
-      PlayerListPositionLogEvent.PlayerPosition player) {
-    T_PlayerCurrentState row = findCurrentStateByEntityOrExternalId(player)
+      PlayerListPositionLogEvent.PlayerPosition player,
+      Long playerId) {
+    T_PlayerCurrentState row = findCurrentStateByPlayerOrEntityOrExternalId(player, playerId)
         .orElseGet(T_PlayerCurrentState::new);
     if (row.getPlayerEntityId() != null && !row.getPlayerEntityId().equals(player.playerEntityId())) {
       playerCurrentStateRepository.delete(row);
@@ -476,6 +501,7 @@ public class GameLogImportService {
       row = new T_PlayerCurrentState();
     }
     row.setPlayerEntityId(player.playerEntityId());
+    row.setPlayerId(playerId);
     row.setPlayerName(player.playerName());
     row.setPositionX(player.positionX());
     row.setPositionY(player.positionY());
@@ -497,8 +523,16 @@ public class GameLogImportService {
     playerCurrentStateRepository.save(row);
   }
 
-  private Optional<T_PlayerCurrentState> findCurrentStateByEntityOrExternalId(
-      PlayerListPositionLogEvent.PlayerPosition player) {
+  private Optional<T_PlayerCurrentState> findCurrentStateByPlayerOrEntityOrExternalId(
+      PlayerListPositionLogEvent.PlayerPosition player,
+      Long playerId) {
+    if (playerId != null) {
+      Optional<T_PlayerCurrentState> byPlayerId = newestCurrentState(
+          playerCurrentStateRepository.findByPlayerId(playerId));
+      if (byPlayerId.isPresent()) {
+        return byPlayerId;
+      }
+    }
     Optional<T_PlayerCurrentState> byEntity = playerCurrentStateRepository.findById(player.playerEntityId());
     if (byEntity.isPresent()) {
       return byEntity;
@@ -522,6 +556,77 @@ public class GameLogImportService {
     return states.stream()
         .max(Comparator.comparing(T_PlayerCurrentState::getLastUpdated, Comparator.nullsFirst(Comparator.naturalOrder()))
             .thenComparing(T_PlayerCurrentState::getPlayerEntityId, Comparator.nullsFirst(Comparator.naturalOrder())));
+  }
+
+  private M_Player upsertPlayerMaster(
+      String playerName,
+      String platformId,
+      String crossPlatformId,
+      OffsetDateTime observedAt) {
+    String eosUserId = stripExternalId(crossPlatformId, "EOS");
+    String steamUserId = stripExternalId(platformId, "Steam");
+    if (eosUserId == null && steamUserId == null) {
+      return null;
+    }
+    String platform = eosUserId == null ? "Steam" : "EOS";
+    String userId = eosUserId == null ? steamUserId : eosUserId;
+    String nativePlatform = steamUserId == null || "Steam".equals(platform) ? null : "Steam";
+    String nativeUserId = steamUserId == null || "Steam".equals(platform) ? null : steamUserId;
+    String playerKey = PlayerIdentity.canonicalPlayerKey(platform, userId, nativePlatform, nativeUserId);
+    if (playerKey == null) {
+      return null;
+    }
+    M_Player player = findExistingPlayer(playerKey, platform, userId, nativePlatform, nativeUserId)
+        .orElseGet(M_Player::new);
+    LocalDateTime seenAt = observedAt.atZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
+    boolean created = player.getId() == null;
+    player.setSourcePath("telnet:lp");
+    player.setPlayerKey(playerKey);
+    player.setPlatform(platform);
+    player.setUserId(userId);
+    player.setNativePlatform(nativePlatform);
+    player.setNativeUserId(nativeUserId);
+    player.setPlayerName(playerName);
+    if (created || player.getFirstSeenAt() == null) {
+      player.setFirstSeenAt(seenAt);
+    }
+    player.setLastSeenAt(seenAt);
+    return playerRepository.save(player);
+  }
+
+  private Optional<M_Player> findExistingPlayer(
+      String playerKey,
+      String platform,
+      String userId,
+      String nativePlatform,
+      String nativeUserId) {
+    List<String> candidateKeys = PlayerIdentity.candidatePlayerKeys(platform, userId, nativePlatform, nativeUserId);
+    if (!candidateKeys.contains(playerKey)) {
+      candidateKeys.addFirst(playerKey);
+    }
+    List<M_Player> byKey = playerRepository.findByPlayerKeyInOrderByIdAsc(candidateKeys);
+    if (!byKey.isEmpty()) {
+      return Optional.of(byKey.getFirst());
+    }
+    Optional<M_Player> byPlatformUser = playerRepository.findFirstByPlatformIgnoreCaseAndUserIdOrderByIdAsc(platform, userId);
+    if (byPlatformUser.isPresent()) {
+      return byPlatformUser;
+    }
+    if (nativePlatform != null && nativeUserId != null) {
+      return playerRepository.findFirstByNativePlatformIgnoreCaseAndNativeUserIdOrderByIdAsc(nativePlatform, nativeUserId);
+    }
+    return Optional.empty();
+  }
+
+  private String stripExternalId(String rawValue, String prefix) {
+    if (rawValue == null || rawValue.isBlank()) {
+      return null;
+    }
+    String trimmed = rawValue.trim();
+    if ("EOS".equalsIgnoreCase(trimmed) || "Steam".equalsIgnoreCase(trimmed)) {
+      return null;
+    }
+    return trimmed.startsWith(prefix + "_") ? trimmed.substring(prefix.length() + 1) : trimmed;
   }
 
   private Set<String> externalIdVariants(String rawValue, String prefix) {
@@ -560,6 +665,7 @@ public class GameLogImportService {
       OffsetDateTime occurredAt,
       String playerName,
       int playerEntityId,
+      Long playerId,
       int positionX,
       Integer positionY,
       int positionZ,
@@ -573,6 +679,7 @@ public class GameLogImportService {
     row.setOccurredAt(occurredAt);
     row.setPlayerName(playerName);
     row.setPlayerEntityId(playerEntityId);
+    row.setPlayerId(playerId);
     row.setPositionX(positionX);
     row.setPositionY(positionY);
     row.setPositionZ(positionZ);
@@ -751,10 +858,11 @@ public class GameLogImportService {
   private static class LogImportContext {
     private final Map<Integer, ActivePlayer> activePlayers = new HashMap<>();
 
-    private void playerJoined(PlayerJoinLogEvent event) {
+    private void playerJoined(PlayerJoinLogEvent event, Long playerId) {
       activePlayers.put(event.playerEntityId(), new ActivePlayer(
           event.playerName(),
           event.playerEntityId(),
+          playerId,
           event.occurredAt(),
           event.positionX(),
           event.positionY(),
@@ -770,10 +878,12 @@ public class GameLogImportService {
 
     private void playerPositionObserved(
         PlayerListPositionLogEvent.PlayerPosition event,
+        Long playerId,
         OffsetDateTime occurredAt) {
       activePlayers.put(event.playerEntityId(), new ActivePlayer(
           event.playerName(),
           event.playerEntityId(),
+          playerId,
           occurredAt,
           event.positionX(),
           event.positionY(),
@@ -836,6 +946,7 @@ public class GameLogImportService {
   private record ActivePlayer(
       String playerName,
       int playerEntityId,
+      Long playerId,
       OffsetDateTime joinedAt,
       Integer x,
       Integer y,
@@ -845,13 +956,14 @@ public class GameLogImportService {
       OffsetDateTime positionUpdatedAt) {
 
     private ActivePlayer withInferenceMethod(String method, boolean trusted) {
-      return new ActivePlayer(playerName, playerEntityId, joinedAt, x, y, z, method, trusted, positionUpdatedAt);
+      return new ActivePlayer(playerName, playerEntityId, playerId, joinedAt, x, y, z, method, trusted, positionUpdatedAt);
     }
 
     private ActivePlayer withPosition(Integer newX, Integer newY, Integer newZ) {
       return new ActivePlayer(
           playerName,
           playerEntityId,
+          playerId,
           joinedAt,
           newX,
           newY,
