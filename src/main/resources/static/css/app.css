@@ -116,6 +116,31 @@ body::before {
   margin-bottom: 18px;
 }
 
+.ai-comment {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgb(211 155 66 / 35%);
+  border-left: 4px solid var(--warn);
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgb(40 33 25 / 94%), rgb(27 25 22 / 88%));
+  box-shadow: var(--shadow);
+}
+
+.ai-comment p {
+  margin: 0 0 6px;
+  color: var(--warn);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ai-comment strong {
+  display: block;
+  color: #fff1df;
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .player-card,
 .panel {
   background: var(--panel);

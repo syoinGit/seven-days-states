@@ -1,17 +1,44 @@
 package com.yuki.sevendays_states.web;
 
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
 public class EventMessageFormatter {
 
+  private static final List<String> KILL_PATTERNS = List.of(
+      "%sが%sを討伐した！ 荒野の治安が一瞬だけ回復。",
+      "%sが%sを倒した！ 本日のサバイバル業務、進捗あり。",
+      "%sが%sを片付けた！ 終末世界にも清掃の心。",
+      "%sが%sを沈黙させた！ ゾンビ側の議事録に深刻な空白。",
+      "%sが%sを撃退した！ 物資より先に武勇伝が増えた。",
+      "%sが%sを成敗した！ この辺りの空気が少しだけマシになった。",
+      "%sが%sを討ち取った！ 荒野の監査ログに赤丸案件。",
+      "%sが%sを仕留めた！ 今日の晩飯が安全になるとは言っていない。",
+      "%sが%sを退場させた！ 入場券はたぶん持っていなかった。",
+      "%sが%sを討伐した！ 拠点の壁が小さく拍手している。"
+  );
+
+  private static final List<String> ENCOUNTER_PATTERNS = List.of(
+      "%sが%sと遭遇した。荒野の接客品質は相変わらず最低。",
+      "%sが%sを起こした。寝起きの機嫌はもちろん最悪。",
+      "%sの近くで%sが活動開始。終末の目覚まし時計が鳴った。",
+      "%sが%sに見つかった。かくれんぼ部門、敗北寄り。",
+      "%sが%sの気配を踏んだ。床板より先に運が鳴った。",
+      "%sの周辺で%sがざわついた。静かな探索、ここで終了。",
+      "%sが%sの営業開始に巻き込まれた。営業時間は命が尽きるまで。",
+      "%sが%sを発見した。向こうもこちらを発見したのが問題。",
+      "%sの探索先に%sが出勤した。無給で、全力で、しつこい。",
+      "%sが%sと鉢合わせた。荒野の予定表には書いてなかった。"
+  );
+
   public String format(String kind, String actor, String actionText, String detailText, String poiName) {
     String safeActor = actor == null || actor.isBlank() ? "誰か" : actor;
     if ("KILL".equals(kind)) {
       if (detailText == null || detailText.isBlank()) {
-        return safeActor + "が討伐した！";
+        return safeActor + "が何かを討伐した！ 記録係は肝心なところで目をそらした。";
       }
-      return safeActor + "が" + detailText + "を討伐した！";
+      return pattern(KILL_PATTERNS, kind, safeActor, detailText, poiName).formatted(safeActor, detailText);
     }
     if ("JOIN".equals(kind)) {
       if (poiName == null || poiName.isBlank()) {
@@ -24,6 +51,9 @@ public class EventMessageFormatter {
     }
     if ("SLEEPER_RESTORE".equals(kind)) {
       return "眠っていた敵が再配置された";
+    }
+    if ("SLEEPER_SPAWN".equals(kind) && detailText != null && !detailText.isBlank()) {
+      return pattern(ENCOUNTER_PATTERNS, kind, safeActor, detailText, poiName).formatted(safeActor, detailText);
     }
     if ("AIR_DROP".equals(kind)) {
       return poiName == null || poiName.isBlank()
@@ -64,5 +94,14 @@ public class EventMessageFormatter {
       return safeActor + "が" + actionText;
     }
     return safeActor + "が" + poiName + "で" + actionText;
+  }
+
+  private String pattern(List<String> patterns, String kind, String actor, String detailText, String poiName) {
+    String seed = String.join("|",
+        kind == null ? "" : kind,
+        actor == null ? "" : actor,
+        detailText == null ? "" : detailText,
+        poiName == null ? "" : poiName);
+    return patterns.get(Math.floorMod(seed.hashCode(), patterns.size()));
   }
 }

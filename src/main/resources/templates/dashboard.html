@@ -22,6 +22,13 @@
 </header>
 
 <main class="layout">
+  <section class="ai-comment" aria-label="ai-comment">
+    <div>
+      <p th:text="${dashboard.aiComment.title}">AI観測コメント</p>
+      <strong th:text="${dashboard.aiComment.body}">荒野は今日も平常運転です。</strong>
+    </div>
+  </section>
+
   <section class="players-now" aria-label="players">
     <article class="player-card" th:if="${#lists.isEmpty(dashboard.playerStatuses)}">
       <div>

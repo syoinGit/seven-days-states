@@ -181,7 +181,8 @@ class DashboardViewServiceTests {
     DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
 
     assertThat(dashboard.travelEntries().getFirst().message())
-        .isEqualTo("DDD烈火王テムジンがショーを討伐した！");
+        .contains("DDD烈火王テムジン")
+        .contains("ショー");
   }
 
   @Test
@@ -201,7 +202,16 @@ class DashboardViewServiceTests {
     EventMessageFormatter formatter = new EventMessageFormatter();
 
     assertThat(formatter.format("KILL", "DDD烈火王テムジン", "討伐した", null, null))
-        .isEqualTo("DDD烈火王テムジンが討伐した！");
+        .contains("DDD烈火王テムジン")
+        .contains("討伐した");
+  }
+
+  @Test
+  void dashboardIncludesAiComment() {
+    DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
+
+    assertThat(dashboard.aiComment().title()).isEqualTo("AI観測コメント");
+    assertThat(dashboard.aiComment().body()).isNotBlank();
   }
 
   @Test

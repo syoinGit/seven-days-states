@@ -21,13 +21,20 @@ public class DashboardViewService {
   private final DisplayTimeFormatter displayTimeFormatter = new DisplayTimeFormatter();
 
   public DashboardView dashboard() {
+    List<PlayerStatus> playerStatuses = playerStatuses();
+    List<TravelEntry> travelEntries = travelEntries();
+    List<VehicleStatus> vehicleStatuses = vehicleStatuses();
+    List<PoiStatus> poiStatuses = poiStatuses();
+    List<KillLeader> killLeaders = killLeaders();
+    ServerState serverState = latestServerState();
     return new DashboardView(
-        playerStatuses(),
-        travelEntries(),
-        vehicleStatuses(),
-        poiStatuses(),
-        killLeaders(),
-        latestServerState());
+        playerStatuses,
+        travelEntries,
+        vehicleStatuses,
+        poiStatuses,
+        killLeaders,
+        serverState,
+        aiComment(playerStatuses, travelEntries, vehicleStatuses, serverState));
   }
 
   private List<PlayerStatus> playerStatuses() {
@@ -669,6 +676,50 @@ public class DashboardViewService {
     return states.getFirst();
   }
 
+  private AiComment aiComment(
+      List<PlayerStatus> playerStatuses,
+      List<TravelEntry> travelEntries,
+      List<VehicleStatus> vehicleStatuses,
+      ServerState serverState) {
+    long onlinePlayers = playerStatuses.stream()
+        .filter(player -> Boolean.TRUE.equals(player.online()))
+        .count();
+    long activeVehicles = vehicleStatuses.stream()
+        .filter(vehicle -> Boolean.TRUE.equals(vehicle.active()))
+        .count();
+    Optional<TravelEntry> latestKill = travelEntries.stream()
+        .filter(entry -> "KILL".equals(entry.kind()))
+        .findFirst();
+    Optional<PlayerStatus> lowHealthPlayer = playerStatuses.stream()
+        .filter(player -> player.health() != null)
+        .filter(player -> player.health() <= 50)
+        .findFirst();
+
+    if (lowHealthPlayer.isPresent()) {
+      PlayerStatus player = lowHealthPlayer.get();
+      return new AiComment("AI観測コメント",
+          player.playerName() + "のHPが" + player.health()
+              + "。荒野基準でもこれは黄色信号です。包帯と逃げ道を確認しましょう。");
+    }
+    if (latestKill.isPresent()) {
+      TravelEntry kill = latestKill.get();
+      return new AiComment("AI観測コメント",
+          kill.actor() + "がまた一件片付けました。討伐ログは順調、ただし慢心はゾンビの好物です。");
+    }
+    if (onlinePlayers > 0) {
+      String playerText = onlinePlayers + "人が活動中";
+      String vehicleText = activeVehicles > 0 ? "、乗り物は" + activeVehicles + "台追跡中" : "";
+      return new AiComment("AI観測コメント",
+          playerText + vehicleText + "。今日はまだ世界がこちらを見逃してくれているようです。今のうちに漁りましょう。");
+    }
+    if (serverState.playerCount() != null && serverState.playerCount() > 0) {
+      return new AiComment("AI観測コメント",
+          "サーバー上では" + serverState.playerCount() + "人を検知しています。カード反映待ちならTelnetログの到着待ちです。");
+    }
+    return new AiComment("AI観測コメント",
+        "現在、荒野は静かです。静かすぎる時ほど、だいたい次の面倒が準備運動しています。");
+  }
+
   private Integer integer(java.sql.ResultSet rs, String column) throws java.sql.SQLException {
     int value = rs.getInt(column);
     return rs.wasNull() ? null : value;
@@ -711,8 +762,12 @@ public class DashboardViewService {
       List<VehicleStatus> vehicleStatuses,
       List<PoiStatus> poiStatuses,
       List<KillLeader> killLeaders,
-      ServerState serverState
+      ServerState serverState,
+      AiComment aiComment
   ) {
+  }
+
+  public record AiComment(String title, String body) {
   }
 
   public record PlayerStatus(
