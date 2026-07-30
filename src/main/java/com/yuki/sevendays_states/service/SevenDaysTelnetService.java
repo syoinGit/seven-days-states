@@ -53,14 +53,10 @@ public class SevenDaysTelnetService {
 
       if (!properties.telnet().password().isBlank()) {
         drainPrompt(reader);
-        writer.write(properties.telnet().password());
-        writer.newLine();
-        writer.flush();
+        writeTelnetCommand(writer, properties.telnet().password());
         drainPrompt(reader);
       }
-      writer.write("lp");
-      writer.newLine();
-      writer.flush();
+      writeTelnetCommand(writer, "lp");
 
       String line;
       boolean commandOutputStarted = false;
@@ -111,6 +107,12 @@ public class SevenDaysTelnetService {
     } catch (Exception e) {
       log.debug("7DTD telnet prompt drain skipped.", e);
     }
+  }
+
+  private void writeTelnetCommand(BufferedWriter writer, String command) throws java.io.IOException {
+    writer.write(command);
+    writer.write("\r\n");
+    writer.flush();
   }
 
   static List<String> normalizeLpOutput(List<String> rawLines, LocalDateTime commandTime) {
