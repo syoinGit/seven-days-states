@@ -310,7 +310,7 @@ time {
   overflow-wrap: anywhere;
 }
 
-.poi-row span {
+.poi-row > div > span {
   display: inline-block;
   margin-top: 5px;
   padding: 2px 6px;
@@ -319,6 +319,10 @@ time {
   color: var(--warn);
   font-size: 11px;
   font-weight: 700;
+}
+
+.vehicle-row small {
+  line-height: 1.55;
 }
 
 .poi-row p {

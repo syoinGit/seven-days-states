@@ -30,7 +30,7 @@ public class SevenDaysTelnetService {
     List<String> lines = executeLpCommand();
     if (lines.isEmpty()) {
       log.info("7DTD telnet lp returned no readable lines.");
-      return new GameLogImportResult(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+      return new GameLogImportResult(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
     log.debug("7DTD telnet lp normalized lines. count={}, firstLine={}", lines.size(), lines.getFirst());
     return logImportService.importLogLines("telnet:lp", lines);

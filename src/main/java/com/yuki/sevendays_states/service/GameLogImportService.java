@@ -10,6 +10,9 @@ import com.yuki.sevendays_states.entity.T_PlayerLeaveTransaction;
 import com.yuki.sevendays_states.entity.T_PlayerPositionTransaction;
 import com.yuki.sevendays_states.entity.T_ServerMetric;
 import com.yuki.sevendays_states.entity.T_SleeperTransaction;
+import com.yuki.sevendays_states.entity.T_VehicleCurrentState;
+import com.yuki.sevendays_states.entity.T_VehiclePositionTransaction;
+import com.yuki.sevendays_states.entity.T_WorldEventTransaction;
 import com.yuki.sevendays_states.log.dto.EntityKillLogEvent;
 import com.yuki.sevendays_states.log.dto.LevelXpSummaryLogEvent;
 import com.yuki.sevendays_states.log.dto.ParsedLogLine;
@@ -18,6 +21,11 @@ import com.yuki.sevendays_states.log.dto.PlayerLeaveLogEvent;
 import com.yuki.sevendays_states.log.dto.PlayerListPositionLogEvent;
 import com.yuki.sevendays_states.log.dto.ServerMetricLogEvent;
 import com.yuki.sevendays_states.log.dto.SleeperLogEvent;
+import com.yuki.sevendays_states.log.dto.VehicleLogEvent;
+import com.yuki.sevendays_states.log.dto.WorldEventLogEvent;
+import com.yuki.sevendays_states.log.parser.AiDirectorLogParser;
+import com.yuki.sevendays_states.log.parser.AirDropLogParser;
+import com.yuki.sevendays_states.log.parser.BloodMoonLogParser;
 import com.yuki.sevendays_states.log.parser.EntityKillLogParser;
 import com.yuki.sevendays_states.log.parser.GameLogLineParser;
 import com.yuki.sevendays_states.log.parser.LevelXpSummaryLogParser;
@@ -27,6 +35,7 @@ import com.yuki.sevendays_states.log.parser.PlayerListPositionLogParser;
 import com.yuki.sevendays_states.log.parser.ServerMetricLogParser;
 import com.yuki.sevendays_states.log.parser.SleeperRestoreLogParser;
 import com.yuki.sevendays_states.log.parser.SleeperSpawnLogParser;
+import com.yuki.sevendays_states.log.parser.VehicleLogParser;
 import com.yuki.sevendays_states.repository.M_PlayerRepository;
 import com.yuki.sevendays_states.repository.T_EntityKillTransactionRepository;
 import com.yuki.sevendays_states.repository.T_LevelXpSummaryTransactionRepository;
@@ -36,6 +45,11 @@ import com.yuki.sevendays_states.repository.T_PlayerLeaveTransactionRepository;
 import com.yuki.sevendays_states.repository.T_PlayerPositionTransactionRepository;
 import com.yuki.sevendays_states.repository.T_ServerMetricRepository;
 import com.yuki.sevendays_states.repository.T_SleeperTransactionRepository;
+import com.yuki.sevendays_states.repository.T_VehicleCurrentStateRepository;
+import com.yuki.sevendays_states.repository.T_VehiclePositionTransactionRepository;
+import com.yuki.sevendays_states.repository.T_WorldEventTransactionRepository;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -79,6 +93,9 @@ public class GameLogImportService {
   private final T_LevelXpSummaryTransactionRepository levelXpSummaryRepository;
   private final T_SleeperTransactionRepository sleeperRepository;
   private final T_ServerMetricRepository serverMetricRepository;
+  private final T_WorldEventTransactionRepository worldEventRepository;
+  private final T_VehicleCurrentStateRepository vehicleCurrentStateRepository;
+  private final T_VehiclePositionTransactionRepository vehiclePositionRepository;
   private final AtomicBoolean running = new AtomicBoolean(false);
 
   private final GameLogLineParser lineParser = new GameLogLineParser();
@@ -90,6 +107,10 @@ public class GameLogImportService {
   private final SleeperSpawnLogParser sleeperSpawnParser = new SleeperSpawnLogParser(lineParser);
   private final SleeperRestoreLogParser sleeperRestoreParser = new SleeperRestoreLogParser(lineParser);
   private final ServerMetricLogParser serverMetricParser = new ServerMetricLogParser(lineParser);
+  private final AirDropLogParser airDropParser = new AirDropLogParser(lineParser);
+  private final AiDirectorLogParser aiDirectorParser = new AiDirectorLogParser(lineParser);
+  private final BloodMoonLogParser bloodMoonParser = new BloodMoonLogParser(lineParser);
+  private final VehicleLogParser vehicleParser = new VehicleLogParser(lineParser);
 
   @Transactional
   public GameLogImportResult importLogs() {
@@ -210,6 +231,26 @@ public class GameLogImportService {
     Optional<SleeperLogEvent> sleeperRestore = sleeperRestoreParser.parse(line);
     if (sleeperRestore.isPresent()) {
       saveSleeper(sourceFile, sleeperRestore.get(), context, counter);
+      return;
+    }
+    Optional<WorldEventLogEvent> airDrop = airDropParser.parse(line);
+    if (airDrop.isPresent()) {
+      saveWorldEvent(sourceFile, airDrop.get(), counter);
+      return;
+    }
+    Optional<WorldEventLogEvent> aiDirector = aiDirectorParser.parse(line);
+    if (aiDirector.isPresent()) {
+      saveWorldEvent(sourceFile, aiDirector.get(), counter);
+      return;
+    }
+    Optional<WorldEventLogEvent> bloodMoon = bloodMoonParser.parse(line);
+    if (bloodMoon.isPresent()) {
+      saveWorldEvent(sourceFile, bloodMoon.get(), counter);
+      return;
+    }
+    Optional<VehicleLogEvent> vehicle = vehicleParser.parse(line);
+    if (vehicle.isPresent()) {
+      saveVehicle(sourceFile, vehicle.get(), counter);
       return;
     }
     serverMetricParser.parse(line).ifPresent(metric -> saveServerMetric(sourceFile, metric, counter));
@@ -720,6 +761,135 @@ public class GameLogImportService {
     counter.serverMetrics++;
   }
 
+  private void saveWorldEvent(String sourceFile, WorldEventLogEvent event, Counter counter) {
+    String hash = lineHash(sourceFile, event.occurredAt().toString(), event.rawLine());
+    if (worldEventRepository.existsBySourceLogHash(hash)) {
+      return;
+    }
+    T_WorldEventTransaction row = new T_WorldEventTransaction();
+    row.setOccurredAt(event.occurredAt());
+    row.setEventType(event.eventType());
+    row.setActorPlayerName(event.actorPlayerName());
+    row.setActorPlayerEntityId(event.actorPlayerEntityId());
+    if (event.actorPlayerEntityId() != null) {
+      playerCurrentStateRepository.findById(event.actorPlayerEntityId())
+          .ifPresent(currentState -> {
+            row.setPlayerId(currentState.getPlayerId());
+            if (row.getActorPlayerName() == null) {
+              row.setActorPlayerName(currentState.getPlayerName());
+            }
+          });
+    } else if (event.targetPositionX() != null && event.targetPositionZ() != null) {
+      inferNearestCurrentStatePlayer(event.targetPositionX(), event.targetPositionZ(), event.occurredAt())
+          .ifPresent(player -> {
+            row.setActorPlayerName(player.playerName());
+            row.setActorPlayerEntityId(player.playerEntityId());
+            row.setPlayerId(player.playerId());
+          });
+    }
+    row.setDetailText(event.detailText());
+    row.setPositionX(event.positionX());
+    row.setPositionY(event.positionY());
+    row.setPositionZ(event.positionZ());
+    row.setTargetPositionX(event.targetPositionX());
+    row.setTargetPositionY(event.targetPositionY());
+    row.setTargetPositionZ(event.targetPositionZ());
+    row.setSourceFile(sourceFile);
+    row.setSourceLogHash(hash);
+    row.setRawLine(event.rawLine());
+    worldEventRepository.save(row);
+    counter.worldEvents++;
+  }
+
+  private void saveVehicle(String sourceFile, VehicleLogEvent event, Counter counter) {
+    String hash = lineHash(sourceFile, event.occurredAt().toString(), event.rawLine());
+    if (vehiclePositionRepository.existsBySourceLogHash(hash)) {
+      return;
+    }
+    T_VehicleCurrentState currentState = vehicleCurrentStateRepository.findById(event.vehicleEntityId())
+        .orElseGet(T_VehicleCurrentState::new);
+    VehicleOwner owner = resolveVehicleOwner(event, currentState);
+    BigDecimal movementDistance = vehicleMovementDistance(currentState, event);
+
+    T_VehiclePositionTransaction history = new T_VehiclePositionTransaction();
+    history.setOccurredAt(event.occurredAt());
+    history.setEventType(event.eventType());
+    history.setVehicleEntityId(event.vehicleEntityId());
+    history.setVehicleType(event.vehicleType());
+    history.setVehicleName(event.vehicleName());
+    history.setOwnerPlayerId(owner.playerId());
+    history.setOwnerCrossPlatformId(owner.crossPlatformId());
+    history.setPositionX(event.positionX());
+    history.setPositionY(event.positionY());
+    history.setPositionZ(event.positionZ());
+    history.setMovementDistance(movementDistance);
+    history.setRemovalReason(event.removalReason());
+    history.setSourceFile(sourceFile);
+    history.setSourceLogHash(hash);
+    history.setRawLine(event.rawLine());
+    vehiclePositionRepository.save(history);
+
+    currentState.setVehicleEntityId(event.vehicleEntityId());
+    currentState.setVehicleType(event.vehicleType());
+    currentState.setVehicleName(event.vehicleName());
+    currentState.setOwnerPlayerId(owner.playerId());
+    currentState.setOwnerCrossPlatformId(owner.crossPlatformId());
+    if (event.positionX() != null && event.positionZ() != null) {
+      currentState.setPositionX(event.positionX());
+      currentState.setPositionY(event.positionY());
+      currentState.setPositionZ(event.positionZ());
+      BigDecimal totalDistance = currentState.getTotalDistance() == null
+          ? BigDecimal.ZERO
+          : currentState.getTotalDistance();
+      currentState.setTotalDistance(totalDistance.add(movementDistance));
+    }
+    currentState.setActive(!"VEHICLE_REMOVED".equals(event.eventType()));
+    currentState.setDestroyedAt("VEHICLE_REMOVED".equals(event.eventType()) ? event.occurredAt() : null);
+    currentState.setLastUpdated(event.occurredAt());
+    currentState.setSourceFile(sourceFile);
+    currentState.setSourceLogHash(hash);
+    vehicleCurrentStateRepository.save(currentState);
+    counter.vehicleEvents++;
+  }
+
+  private VehicleOwner resolveVehicleOwner(VehicleLogEvent event, T_VehicleCurrentState currentState) {
+    String ownerCrossPlatformId = event.ownerCrossPlatformId() == null
+        ? currentState.getOwnerCrossPlatformId()
+        : event.ownerCrossPlatformId();
+    Long ownerPlayerId = currentState.getOwnerPlayerId();
+    if (event.ownerCrossPlatformId() != null) {
+      ownerPlayerId = findPlayerByCrossPlatformId(event.ownerCrossPlatformId())
+          .map(M_Player::getId)
+          .orElse(ownerPlayerId);
+    } else if (ownerCrossPlatformId != null && ownerPlayerId == null) {
+      ownerPlayerId = findPlayerByCrossPlatformId(ownerCrossPlatformId)
+          .map(M_Player::getId)
+          .orElse(null);
+    }
+    return new VehicleOwner(ownerPlayerId, ownerCrossPlatformId);
+  }
+
+  private Optional<M_Player> findPlayerByCrossPlatformId(String crossPlatformId) {
+    String eosUserId = stripExternalId(crossPlatformId, "EOS");
+    if (eosUserId == null) {
+      return Optional.empty();
+    }
+    return findExistingPlayer("EOS:" + eosUserId, "EOS", eosUserId, null, null);
+  }
+
+  private BigDecimal vehicleMovementDistance(T_VehicleCurrentState currentState, VehicleLogEvent event) {
+    if (currentState.getVehicleEntityId() == null
+        || currentState.getPositionX() == null
+        || currentState.getPositionZ() == null
+        || event.positionX() == null
+        || event.positionZ() == null) {
+      return BigDecimal.ZERO;
+    }
+    double horizontalDistance = distance(currentState.getPositionX(), currentState.getPositionZ(),
+        event.positionX(), event.positionZ());
+    return BigDecimal.valueOf(horizontalDistance).setScale(1, RoundingMode.HALF_UP);
+  }
+
   private boolean shouldStoreServerMetric(ServerMetricLogEvent event) {
     return serverMetricRepository.findTopByOrderByOccurredAtDesc()
         .map(last -> {
@@ -821,6 +991,8 @@ public class GameLogImportService {
     private long sleeperRestores;
     private long serverMetrics;
     private long skippedServerMetrics;
+    private long worldEvents;
+    private long vehicleEvents;
     private long malformedLines;
 
     private void add(GameLogImportResult result) {
@@ -835,6 +1007,8 @@ public class GameLogImportService {
       sleeperRestores += result.sleeperRestores();
       serverMetrics += result.serverMetrics();
       skippedServerMetrics += result.skippedServerMetrics();
+      worldEvents += result.worldEvents();
+      vehicleEvents += result.vehicleEvents();
       malformedLines += result.malformedLines();
     }
 
@@ -851,6 +1025,8 @@ public class GameLogImportService {
           sleeperRestores,
           serverMetrics,
           skippedServerMetrics,
+          worldEvents,
+          vehicleEvents,
           malformedLines);
     }
   }
@@ -975,5 +1151,8 @@ public class GameLogImportService {
   }
 
   private record ActivePlayerDistance(ActivePlayer player, double distance) {
+  }
+
+  private record VehicleOwner(Long playerId, String crossPlatformId) {
   }
 }

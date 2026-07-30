@@ -99,6 +99,33 @@
     <aside class="side-stack">
       <article class="panel">
         <div class="panel-head">
+          <h2>乗り物</h2>
+        </div>
+        <div class="poi-list">
+          <div th:if="${#lists.isEmpty(dashboard.vehicleStatuses)}" class="empty">まだ乗り物ログがありません。</div>
+          <div class="poi-row vehicle-row" th:each="vehicle : ${dashboard.vehicleStatuses}">
+            <div>
+              <strong th:text="${vehicle.vehicleName}">vehicle</strong>
+              <span th:text="${vehicle.active == false ? '消失' : '追跡中'}">追跡中</span>
+              <p>
+                <b th:text="${vehicle.ownerName}">owner</b>
+                <span>の乗り物</span>
+              </p>
+            </div>
+            <small>
+              <span th:text="${vehicle.coordinate ?: '-'}">position</span>
+              <span th:if="${vehicle.totalDistance != null}">
+                <br>
+                <span th:text="${#numbers.formatDecimal(vehicle.totalDistance, 1, 1)}">0.0</span>
+                <span>m</span>
+              </span>
+            </small>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
           <h2>探索中の場所</h2>
         </div>
         <div class="poi-list">

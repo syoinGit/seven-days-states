@@ -34,6 +34,9 @@ class DashboardViewServiceTests {
     jdbcTemplate.update("delete from t_player_state_snapshot");
     jdbcTemplate.update("delete from t_entity_kill_transaction");
     jdbcTemplate.update("delete from t_sleeper_transaction");
+    jdbcTemplate.update("delete from t_vehicle_position_transaction");
+    jdbcTemplate.update("delete from t_vehicle_current_state");
+    jdbcTemplate.update("delete from t_world_event_transaction");
     jdbcTemplate.update("delete from m_japanese_translation");
     jdbcTemplate.update("delete from m_player");
   }
@@ -188,5 +191,43 @@ class DashboardViewServiceTests {
         .extracting(DashboardViewService.TravelEntry::kind)
         .contains("KILL")
         .doesNotContain("SLEEPER_RESTORE");
+  }
+
+  @Test
+  void dashboardShowsWorldAndVehicleEvents() {
+    jdbcTemplate.update("""
+        insert into m_player (id, player_key, platform, user_id, player_name, last_seen_at)
+        values (1, 'EOS:eos-a', 'EOS', 'eos-a', 'PlayerA', timestamp '2026-07-26 10:00:00')
+        """);
+    jdbcTemplate.update("""
+        insert into t_world_event_transaction
+        (occurred_at, event_type, actor_player_name, detail_text, position_x, position_y, position_z,
+         source_file, source_log_hash, raw_line)
+        values (timestamp with time zone '2026-07-29 05:07:38+00:00', 'AIR_DROP', null, '補給物資', 460, 209, 33,
+                'log', 'airdrop-1', 'raw')
+        """);
+    jdbcTemplate.update("""
+        insert into t_vehicle_current_state
+        (vehicle_entity_id, vehicle_type, vehicle_name, owner_player_id, owner_cross_platform_id,
+         position_x, position_y, position_z, total_distance, active, last_updated, source_file, source_log_hash)
+        values (2631, 'EntityBicycle', 'vehicleBicycle', 1, 'EOS_eos-a', 452, 38, -605, 20.0, true,
+                timestamp with time zone '2026-07-29 05:58:16+00:00', 'log', 'vehicle-current')
+        """);
+    jdbcTemplate.update("""
+        insert into t_vehicle_position_transaction
+        (occurred_at, event_type, vehicle_entity_id, vehicle_type, vehicle_name, owner_player_id,
+         position_x, position_y, position_z, movement_distance, source_file, source_log_hash, raw_line)
+        values (timestamp with time zone '2026-07-29 05:56:11+00:00', 'VEHICLE_LOADED', 2631, 'EntityBicycle',
+                'vehicleBicycle', 1, 442, 38, -615, 0, 'log', 'vehicle-loaded', 'raw')
+        """);
+
+    DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
+
+    assertThat(dashboard.travelEntries())
+        .extracting(DashboardViewService.TravelEntry::kind)
+        .contains("AIR_DROP", "VEHICLE_LOADED");
+    assertThat(dashboard.vehicleStatuses()).hasSize(1);
+    assertThat(dashboard.vehicleStatuses().getFirst().ownerName()).isEqualTo("PlayerA");
+    assertThat(dashboard.vehicleStatuses().getFirst().totalDistance()).isEqualByComparingTo("20.0");
   }
 }

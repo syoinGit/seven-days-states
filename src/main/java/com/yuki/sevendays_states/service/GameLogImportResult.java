@@ -12,6 +12,8 @@ public record GameLogImportResult(
     long sleeperRestores,
     long serverMetrics,
     long skippedServerMetrics,
+    long worldEvents,
+    long vehicleEvents,
     long malformedLines
 ) {
 }

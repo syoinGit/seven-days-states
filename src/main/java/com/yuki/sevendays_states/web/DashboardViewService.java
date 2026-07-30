@@ -23,6 +23,7 @@ public class DashboardViewService {
     return new DashboardView(
         playerStatuses(),
         travelEntries(),
+        vehicleStatuses(),
         poiStatuses(),
         killLeaders(),
         latestServerState());
@@ -285,6 +286,64 @@ public class DashboardViewService {
                  null as y,
                  null as z
           from t_level_xp_summary_transaction
+          union all
+          select w.occurred_at,
+                 w.event_type as kind,
+                 w.actor_player_name as player_name,
+                 case w.event_type
+                   when 'AIR_DROP' then '補給物資が投下された'
+                   when 'WANDERING_HORDE' then '徘徊ホードが発生した'
+                   when 'SCOUT_HORDE' then 'スクリーマーの気配がした'
+                   when 'SCREAMER_SPAWN' then 'スクリーマーが出現した'
+                   when 'BLOOD_MOON' then 'ブラッドムーン予定が更新された'
+                   else 'イベントが発生した'
+                 end as action_text,
+                 w.detail_text,
+                 (
+                   select poi.poi_name
+                   from m_world_poi poi
+                   where w.position_x is not null
+                     and coalesce(poi.category, '') <> 'part'
+                     and poi.poi_name not like 'part_%'
+                   order by ((poi.x - w.position_x) * (poi.x - w.position_x)
+                         + (poi.z - w.position_z) * (poi.z - w.position_z))
+                   limit 1
+                 ) as poi_name,
+                 w.position_x as x,
+                 w.position_y as y,
+                 w.position_z as z
+          from t_world_event_transaction w
+          union all
+          select v.occurred_at,
+                 v.event_type as kind,
+                 p.player_name,
+                 case v.event_type
+                   when 'VEHICLE_REMOVED' then '乗り物が消失した'
+                   when 'VEHICLE_LOADED' then '乗り物を確認した'
+                   when 'VEHICLE_POST_INIT' then '乗り物が生成された'
+                   else '乗り物を確認した'
+                 end as action_text,
+                 coalesce(v.vehicle_name, v.vehicle_type) ||
+                   case when v.removal_reason is not null then ' / ' || v.removal_reason else '' end as detail_text,
+                 (
+                   select poi.poi_name
+                   from m_world_poi poi
+                   where v.position_x is not null
+                     and coalesce(poi.category, '') <> 'part'
+                     and poi.poi_name not like 'part_%'
+                   order by ((poi.x - v.position_x) * (poi.x - v.position_x)
+                         + (poi.z - v.position_z) * (poi.z - v.position_z))
+                   limit 1
+                 ) as poi_name,
+                 v.position_x as x,
+                 v.position_y as y,
+                 v.position_z as z
+          from t_vehicle_position_transaction v
+          left join m_player p on p.id = v.owner_player_id
+              or (v.owner_player_id is null
+                  and v.owner_cross_platform_id is not null
+                  and p.player_key = 'EOS:' || replace(v.owner_cross_platform_id, 'EOS_', ''))
+          where v.event_type in ('VEHICLE_REMOVED', 'VEHICLE_LOADED', 'VEHICLE_POST_INIT')
         ) entries
         order by occurred_at desc
         limit 30
@@ -302,6 +361,34 @@ public class DashboardViewService {
             displayEventPoi(rs.getString("poi_name"))),
         displayEventPoi(rs.getString("poi_name")),
         coordinate(rs.getObject("x"), rs.getObject("y"), rs.getObject("z"))));
+  }
+
+  private List<VehicleStatus> vehicleStatuses() {
+    return jdbcTemplate.query("""
+        select v.vehicle_entity_id,
+               coalesce(v.vehicle_name, v.vehicle_type) as vehicle_name,
+               p.player_name as owner_name,
+               v.position_x,
+               v.position_y,
+               v.position_z,
+               v.total_distance,
+               v.active,
+               v.last_updated
+        from t_vehicle_current_state v
+        left join m_player p on p.id = v.owner_player_id
+            or (v.owner_player_id is null
+                and v.owner_cross_platform_id is not null
+                and p.player_key = 'EOS:' || replace(v.owner_cross_platform_id, 'EOS_', ''))
+        order by v.active desc, v.last_updated desc
+        limit 8
+        """, (rs, rowNum) -> new VehicleStatus(
+        rs.getInt("vehicle_entity_id"),
+        rs.getString("vehicle_name"),
+        displayPlayer(rs.getString("owner_name")),
+        coordinate(rs.getObject("position_x"), rs.getObject("position_y"), rs.getObject("position_z")),
+        rs.getBigDecimal("total_distance"),
+        booleanValue(rs, "active"),
+        toDisplayTime(rs.getObject("last_updated"))));
   }
 
   private List<PoiStatus> poiStatuses() {
@@ -429,6 +516,7 @@ public class DashboardViewService {
   public record DashboardView(
       List<PlayerStatus> playerStatuses,
       List<TravelEntry> travelEntries,
+      List<VehicleStatus> vehicleStatuses,
       List<PoiStatus> poiStatuses,
       List<KillLeader> killLeaders,
       ServerState serverState
@@ -460,6 +548,17 @@ public class DashboardViewService {
       String message,
       String poiName,
       String coordinate
+  ) {
+  }
+
+  public record VehicleStatus(
+      Integer vehicleEntityId,
+      String vehicleName,
+      String ownerName,
+      String coordinate,
+      BigDecimal totalDistance,
+      Boolean active,
+      String lastUpdated
   ) {
   }
 

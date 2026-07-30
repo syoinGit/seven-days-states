@@ -9,6 +9,10 @@ import com.yuki.sevendays_states.repository.T_PlayerLeaveTransactionRepository;
 import com.yuki.sevendays_states.repository.T_PlayerPositionTransactionRepository;
 import com.yuki.sevendays_states.repository.T_ServerMetricRepository;
 import com.yuki.sevendays_states.repository.T_SleeperTransactionRepository;
+import com.yuki.sevendays_states.repository.T_VehicleCurrentStateRepository;
+import com.yuki.sevendays_states.repository.T_VehiclePositionTransactionRepository;
+import com.yuki.sevendays_states.repository.T_WorldEventTransactionRepository;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -64,6 +68,15 @@ class GameLogImportServiceTests {
   @Autowired
   private T_ServerMetricRepository serverMetricRepository;
 
+  @Autowired
+  private T_WorldEventTransactionRepository worldEventRepository;
+
+  @Autowired
+  private T_VehicleCurrentStateRepository vehicleCurrentStateRepository;
+
+  @Autowired
+  private T_VehiclePositionTransactionRepository vehiclePositionRepository;
+
   @BeforeEach
   void deleteTransactions() {
     playerJoinRepository.deleteAll();
@@ -74,6 +87,9 @@ class GameLogImportServiceTests {
     levelXpSummaryRepository.deleteAll();
     sleeperRepository.deleteAll();
     serverMetricRepository.deleteAll();
+    vehiclePositionRepository.deleteAll();
+    vehicleCurrentStateRepository.deleteAll();
+    worldEventRepository.deleteAll();
     playerRepository.deleteAll();
   }
 
@@ -90,6 +106,8 @@ class GameLogImportServiceTests {
         2026-07-26T08:36:07 2233.109 INF CVarLogValue: $xpFromKillThisLevel == 3950
         2026-07-26T08:24:51 1556.661 INF 1544.871 SleeperVolume -546, 55, -577: Spawning -538, 55, -570 (-34, -36), group 'sleeperHordeStageGS2', class zombieBoe, count 5
         2026-07-26T08:21:24 1349.173 INF 1337.678 SleeperVolume -151, 38, -767: Restoring -144, 39, -765 (-9, -48) 'zombieSteveCrawler', count 0
+        2026-07-29T14:07:38 11342.887 INF AIAirDrop: Spawned supply crate at (460.2, 209.1, 32.6), plane is at (461.73, 219.09, 38.19)
+        2026-07-29T13:40:42 9726.680 INF 219671 VehicleManager write #0, id 3718, vehicleBicycle, (157.4, 38.0, -733.3), chunk 9, -46
         """);
 
     GameLogImportResult result = logImportService.importLogFile(log);
@@ -101,12 +119,74 @@ class GameLogImportServiceTests {
     assertThat(result.levelXpSummaries()).isEqualTo(1);
     assertThat(result.sleeperSpawns()).isEqualTo(1);
     assertThat(result.sleeperRestores()).isEqualTo(1);
+    assertThat(result.worldEvents()).isEqualTo(1);
+    assertThat(result.vehicleEvents()).isEqualTo(1);
     assertThat(playerJoinRepository.count()).isEqualTo(1);
     assertThat(playerLeaveRepository.count()).isEqualTo(1);
     assertThat(playerPositionRepository.count()).isEqualTo(1);
     assertThat(entityKillRepository.count()).isEqualTo(1);
     assertThat(levelXpSummaryRepository.count()).isEqualTo(1);
     assertThat(sleeperRepository.count()).isEqualTo(2);
+    assertThat(worldEventRepository.count()).isEqualTo(1);
+    assertThat(vehiclePositionRepository.count()).isEqualTo(1);
+  }
+
+  @Test
+  void importsWorldEventsAndSkipsDuplicates() throws Exception {
+    Path log = writeLog("""
+        2026-07-29T14:07:38 11342.887 INF AIAirDrop: Spawned supply crate at (460.2, 209.1, 32.6), plane is at (461.73, 219.09, 38.19)
+        2026-07-29T14:09:23 11448.316 INF AIDirector: FindWanderingTargets at player '[type=EntityPlayer, name=hosi42861, id=485]', dist 55.58979
+        2026-07-29T14:23:01 12265.980 INF AIDirector: Spawning Scouts2 at (446.0, 39.0, -701.0), to (437.0, 40.0, -621.0)
+        2026-07-29T14:23:01 12266.015 INF Spawned [type=EntityZombie, name=zombieScreamer, id=4601] at (447.5, 39.0, -706.5) Day=13 TotalInWave=1 CurrentWave=1
+        2026-07-30T10:57:36 36.485 INF BloodMoon SetDay: day 14, last day 7, freq 7, range 0
+        """);
+
+    GameLogImportResult first = logImportService.importLogFile(log);
+    GameLogImportResult second = logImportService.importLogFile(log);
+
+    assertThat(first.worldEvents()).isEqualTo(5);
+    assertThat(second.worldEvents()).isZero();
+    assertThat(worldEventRepository.findAll())
+        .extracting(row -> row.getEventType() + ":" + row.getPositionX() + ":" + row.getActorPlayerName())
+        .containsExactly(
+            "AIR_DROP:460:null",
+            "WANDERING_HORDE:null:hosi42861",
+            "SCOUT_HORDE:446:null",
+            "SCREAMER_SPAWN:448:null",
+            "BLOOD_MOON:null:null");
+  }
+
+  @Test
+  void importsVehicleOwnerAndMovementDistance() throws Exception {
+    Path log = writeLog("""
+        2026-07-27T11:31:26 3921.931 INF Executing command 'lp' by Telnet from 172.18.0.1:40132
+        0. id=171, 魅惑のこし餡ぼでぃ, pos=(581.7, 40.0, -538.9), rot=(-46.4, -73.1, 0.0), remote=True, health=115, deaths=1, zombies=226, players=0, score=196, level=15, pltfmid=Steam_76561198382915826, crossid=EOS_00024b5c4d2546468b7c6775bd927c32, ip=219.107.140.192, ping=5
+        Total of 1 in the game
+        2026-07-29T13:56:11 10656.556 INF VehicleManager loaded #0, id 2631, [type=EntityBicycle, name=vehicleBicycle, id=2631], (442.2, 38.0, -615.0), chunk 27, -39 (27, -39), owner EOS_00024b5c4d2546468b7c6775bd927c32
+        2026-07-29T13:58:16 10781.369 INF 240659 VehicleManager write #1, id 2631, vehicleBicycle, (452.2, 38.0, -615.0), chunk 28, -39
+        2026-07-29T14:00:16 10901.575 INF 243053 VehicleManager write #1, id 2631, vehicleBicycle, (452.2, 38.0, -605.0), chunk 28, -38
+        """);
+
+    logImportService.importLogFile(log);
+
+    Long ownerPlayerId = playerRepository.findAll().getFirst().getId();
+    assertThat(vehiclePositionRepository.findAll())
+        .extracting(row -> row.getEventType() + ":" + row.getOwnerPlayerId())
+        .containsExactly(
+            "VEHICLE_LOADED:" + ownerPlayerId,
+            "VEHICLE_WRITE:" + ownerPlayerId,
+            "VEHICLE_WRITE:" + ownerPlayerId);
+    assertThat(vehiclePositionRepository.findAll())
+        .extracting(row -> row.getMovementDistance())
+        .usingComparatorForType(BigDecimal::compareTo, BigDecimal.class)
+        .containsExactly(BigDecimal.ZERO, new BigDecimal("10.0"), new BigDecimal("10.0"));
+    assertThat(vehicleCurrentStateRepository.findById(2631)).hasValueSatisfying(row -> {
+      assertThat(row.getOwnerPlayerId()).isEqualTo(ownerPlayerId);
+      assertThat(row.getPositionX()).isEqualTo(452);
+      assertThat(row.getPositionZ()).isEqualTo(-605);
+      assertThat(row.getTotalDistance()).isEqualByComparingTo("20.0");
+      assertThat(row.isActive()).isTrue();
+    });
   }
 
   @Test

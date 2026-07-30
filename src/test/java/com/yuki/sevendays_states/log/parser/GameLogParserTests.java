@@ -7,6 +7,8 @@ import com.yuki.sevendays_states.log.dto.PlayerLeaveLogEvent;
 import com.yuki.sevendays_states.log.dto.PlayerListPositionLogEvent;
 import com.yuki.sevendays_states.log.dto.ServerMetricLogEvent;
 import com.yuki.sevendays_states.log.dto.SleeperLogEvent;
+import com.yuki.sevendays_states.log.dto.VehicleLogEvent;
+import com.yuki.sevendays_states.log.dto.WorldEventLogEvent;
 import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -132,6 +134,67 @@ class GameLogParserTests {
     assertThat(event.itemCount()).isZero();
     assertThat(event.co()).isEqualTo(1);
     assertThat(event.rssMb()).isEqualByComparingTo(new BigDecimal("2806.8"));
+  }
+
+  @Test
+  void parsesAirDropSupplyCrate() {
+    WorldEventLogEvent event = new AirDropLogParser().parse(
+        "2026-07-29T14:07:38 11342.887 INF AIAirDrop: Spawned supply crate at (460.2, 209.1, 32.6), plane is at (461.73, 219.09, 38.19)")
+        .orElseThrow();
+
+    assertThat(event.eventType()).isEqualTo("AIR_DROP");
+    assertThat(event.positionX()).isEqualTo(460);
+    assertThat(event.positionY()).isEqualTo(209);
+    assertThat(event.positionZ()).isEqualTo(33);
+  }
+
+  @Test
+  void parsesAiDirectorEvents() {
+    AiDirectorLogParser parser = new AiDirectorLogParser();
+
+    WorldEventLogEvent horde = parser.parse(
+        "2026-07-29T14:09:23 11448.316 INF AIDirector: FindWanderingTargets at player '[type=EntityPlayer, name=hosi42861, id=485]', dist 55.58979")
+        .orElseThrow();
+    WorldEventLogEvent scout = parser.parse(
+        "2026-07-29T14:23:01 12265.980 INF AIDirector: Spawning Scouts2 at (446.0, 39.0, -701.0), to (437.0, 40.0, -621.0)")
+        .orElseThrow();
+    WorldEventLogEvent screamer = parser.parse(
+        "2026-07-29T14:23:01 12266.015 INF Spawned [type=EntityZombie, name=zombieScreamer, id=4601] at (447.5, 39.0, -706.5) Day=13 TotalInWave=1 CurrentWave=1")
+        .orElseThrow();
+
+    assertThat(horde.eventType()).isEqualTo("WANDERING_HORDE");
+    assertThat(horde.actorPlayerName()).isEqualTo("hosi42861");
+    assertThat(horde.actorPlayerEntityId()).isEqualTo(485);
+    assertThat(scout.eventType()).isEqualTo("SCOUT_HORDE");
+    assertThat(scout.targetPositionZ()).isEqualTo(-621);
+    assertThat(screamer.eventType()).isEqualTo("SCREAMER_SPAWN");
+    assertThat(screamer.positionX()).isEqualTo(448);
+  }
+
+  @Test
+  void parsesBloodMoonAndVehicleEvents() {
+    WorldEventLogEvent bloodMoon = new BloodMoonLogParser().parse(
+        "2026-07-30T10:57:36 36.485 INF BloodMoon SetDay: day 14, last day 7, freq 7, range 0")
+        .orElseThrow();
+    VehicleLogParser parser = new VehicleLogParser();
+    VehicleLogEvent loaded = parser.parse(
+        "2026-07-29T13:56:11 10656.556 INF VehicleManager loaded #0, id 2631, [type=EntityBicycle, name=vehicleBicycle, id=2631], (442.2, 38.0, -615.0), chunk 27, -39 (27, -39), owner EOS_00024b5c4d2546468b7c6775bd927c32")
+        .orElseThrow();
+    VehicleLogEvent write = parser.parse(
+        "2026-07-29T13:40:42 9726.680 INF 219671 VehicleManager write #0, id 3718, vehicleBicycle, (157.4, 38.0, -733.3), chunk 9, -46")
+        .orElseThrow();
+    VehicleLogEvent removed = parser.parse(
+        "2026-07-29T14:21:58 12203.592 INF VehicleManager RemoveTrackedVehicle [type=EntityBicycle, name=vehicleBicycle, id=3718], Killed")
+        .orElseThrow();
+
+    assertThat(bloodMoon.eventType()).isEqualTo("BLOOD_MOON");
+    assertThat(bloodMoon.detailText()).isEqualTo("Day 14 / 周期 7");
+    assertThat(loaded.eventType()).isEqualTo("VEHICLE_LOADED");
+    assertThat(loaded.ownerCrossPlatformId()).isEqualTo("EOS_00024b5c4d2546468b7c6775bd927c32");
+    assertThat(write.eventType()).isEqualTo("VEHICLE_WRITE");
+    assertThat(write.positionX()).isEqualTo(157);
+    assertThat(removed.eventType()).isEqualTo("VEHICLE_REMOVED");
+    assertThat(removed.removalReason()).isEqualTo("Killed");
   }
 
   @Test
