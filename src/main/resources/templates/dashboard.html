@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="10">
+  <meta http-equiv="refresh" content="60">
   <title>7 Days 旅日記</title>
   <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
@@ -33,7 +33,10 @@
       <div class="player-main">
         <span class="status-dot" th:classappend="${player.online == false} ? ' offline'"></span>
         <div>
-          <h2 th:text="${player.playerName}">player</h2>
+          <h2>
+            <a th:href="@{/players/{playerId}(playerId=${player.playerId})}"
+               th:text="${player.playerName}">player</a>
+          </h2>
           <p>
             <strong th:text="${player.poiName}">荒野のどこか</strong>
             <span th:text="${player.online == false ? 'オフライン' : 'オンライン'}">オンライン</span>

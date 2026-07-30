@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -164,13 +165,14 @@ public class DashboardViewService {
           left join latest_position pp on pp.player_id = p.id
               or (pp.player_id is null and pp.player_name = p.player_name)
         )
-        select player_name, world_name, game_name, last_login, x, y, z,
+        select player_id, player_name, world_name, game_name, last_login, x, y, z,
                health, deaths, level, ping, online, poi_name, poi_category
         from status_rows
         where card_rank = 1
         order by last_login desc nulls last, player_name
         limit 12
         """, (rs, rowNum) -> new PlayerStatus(
+        rs.getLong("player_id"),
         rs.getString("player_name"),
         rs.getString("world_name"),
         rs.getString("game_name"),
@@ -183,6 +185,133 @@ public class DashboardViewService {
         integer(rs, "level"),
         integer(rs, "ping"),
         booleanValue(rs, "online")), currentStateFreshAfter);
+  }
+
+  public Optional<PlayerDetailView> playerDetail(Long playerId) {
+    OffsetDateTime currentStateFreshAfter = OffsetDateTime.now(ZoneOffset.UTC)
+        .minusSeconds(properties.transaction().currentStateMaxAgeSeconds());
+    List<PlayerStatus> statuses = jdbcTemplate.query("""
+        with player_identity as (
+          select p.*,
+                 case
+                   when upper(p.platform) = 'EOS' then 'EOS:' || replace(p.user_id, 'EOS_', '')
+                   when p.user_id like 'EOS_%' then 'EOS:' || replace(p.user_id, 'EOS_', '')
+                   when upper(coalesce(p.native_platform, '')) = 'EOS' then 'EOS:' || replace(p.native_user_id, 'EOS_', '')
+                   when p.native_user_id like 'EOS_%' then 'EOS:' || replace(p.native_user_id, 'EOS_', '')
+                 end as eos_key,
+                 case
+                   when upper(p.platform) = 'STEAM' then 'Steam:' || replace(p.user_id, 'Steam_', '')
+                   when p.user_id like 'Steam_%' then 'Steam:' || replace(p.user_id, 'Steam_', '')
+                   when upper(coalesce(p.native_platform, '')) = 'STEAM' then 'Steam:' || replace(p.native_user_id, 'Steam_', '')
+                   when p.native_user_id like 'Steam_%' then 'Steam:' || replace(p.native_user_id, 'Steam_', '')
+                 end as steam_key
+          from m_player p
+          where p.id = ?
+        ),
+        latest_snapshot as (
+          select *
+          from (
+            select s.*,
+                   row_number() over (partition by player_id order by captured_at desc, id desc) as snapshot_rank
+            from t_player_state_snapshot s
+            where s.player_id = ?
+          ) ranked_snapshot
+          where snapshot_rank = 1
+        ),
+        latest_current_state as (
+          select *
+          from (
+            select c.*,
+                   case
+                     when c.cross_platform_id is not null and c.cross_platform_id <> '' then 'EOS:' || replace(c.cross_platform_id, 'EOS_', '')
+                     when c.platform_id is not null and c.platform_id <> '' then 'Steam:' || replace(c.platform_id, 'Steam_', '')
+                     else 'ENTITY:' || c.player_entity_id
+                   end as state_player_key,
+                   row_number() over (
+                     partition by coalesce(
+                       'PLAYER:' || c.player_id,
+                       case
+                         when c.cross_platform_id is not null and c.cross_platform_id <> '' then 'EOS:' || replace(c.cross_platform_id, 'EOS_', '')
+                         when c.platform_id is not null and c.platform_id <> '' then 'Steam:' || replace(c.platform_id, 'Steam_', '')
+                         else 'ENTITY:' || c.player_entity_id
+                       end
+                     )
+                     order by c.last_updated desc, c.online desc
+                   ) as state_rank
+            from t_player_current_state c
+          ) ranked_state
+          where state_rank = 1
+        ),
+        latest_position as (
+          select *
+          from (
+            select pp.*,
+                   row_number() over (partition by player_id order by occurred_at desc) as position_rank
+            from t_player_position_transaction pp
+            where pp.player_id = ?
+          ) ranked_position
+          where position_rank = 1
+        )
+        select p.id as player_id,
+               p.player_name,
+               s.world_name,
+               s.game_name,
+               coalesce(c.last_updated, pp.occurred_at, s.last_login) as last_login,
+               coalesce(c.position_x, pp.position_x, s.x) as x,
+               coalesce(c.position_y, pp.position_y, s.y) as y,
+               coalesce(c.position_z, pp.position_z, s.z) as z,
+               c.health,
+               c.deaths,
+               c.level,
+               c.ping,
+               case
+                 when c.online = true and c.last_updated >= ? then true
+                 else false
+               end as online,
+               (
+                 select poi.poi_name
+                 from m_world_poi poi
+                 where coalesce(poi.category, '') <> 'part'
+                   and poi.poi_name not like 'part_%'
+                 order by ((poi.x - coalesce(c.position_x, pp.position_x, s.x)) * (poi.x - coalesce(c.position_x, pp.position_x, s.x))
+                       + (poi.z - coalesce(c.position_z, pp.position_z, s.z)) * (poi.z - coalesce(c.position_z, pp.position_z, s.z)))
+                 limit 1
+               ) as poi_name,
+               (
+                 select poi.category
+                 from m_world_poi poi
+                 where coalesce(poi.category, '') <> 'part'
+                   and poi.poi_name not like 'part_%'
+                 order by ((poi.x - coalesce(c.position_x, pp.position_x, s.x)) * (poi.x - coalesce(c.position_x, pp.position_x, s.x))
+                       + (poi.z - coalesce(c.position_z, pp.position_z, s.z)) * (poi.z - coalesce(c.position_z, pp.position_z, s.z)))
+                 limit 1
+               ) as poi_category
+        from player_identity p
+        left join latest_snapshot s on s.player_id = p.id
+        left join latest_current_state c on c.player_id = p.id
+            or (c.player_id is null and c.state_player_key in (p.eos_key, p.steam_key, p.player_key))
+        left join latest_position pp on pp.player_id = p.id
+        """, (rs, rowNum) -> new PlayerStatus(
+        rs.getLong("player_id"),
+        rs.getString("player_name"),
+        rs.getString("world_name"),
+        rs.getString("game_name"),
+        toDisplayTime(rs.getObject("last_login")),
+        coordinate(rs.getObject("x"), rs.getObject("y"), rs.getObject("z")),
+        displayPoi(rs.getString("poi_name")),
+        rs.getString("poi_category"),
+        integer(rs, "health"),
+        integer(rs, "deaths"),
+        integer(rs, "level"),
+        integer(rs, "ping"),
+        booleanValue(rs, "online")), playerId, playerId, playerId, currentStateFreshAfter);
+    if (statuses.isEmpty()) {
+      return Optional.empty();
+    }
+    return Optional.of(new PlayerDetailView(
+        statuses.getFirst(),
+        playerTimelineEntries(playerId),
+        playerPositionEntries(playerId)));
   }
 
   private List<TravelEntry> travelEntries() {
@@ -446,6 +575,69 @@ public class DashboardViewService {
         rs.getLong("sleeper_events")));
   }
 
+  private List<TravelEntry> playerTimelineEntries(Long playerId) {
+    return jdbcTemplate.query("""
+        select *
+        from (
+          select occurred_at, 'JOIN' as kind, player_name, 'ログインした' as action_text,
+                 null as detail_text, position_x as x, position_y as y, position_z as z
+          from t_player_join_transaction
+          where player_id = ?
+          union all
+          select occurred_at, 'LEAVE' as kind, player_name, 'ログアウトした' as action_text,
+                 null as detail_text, null as x, null as y, null as z
+          from t_player_leave_transaction
+          where player_id = ?
+          union all
+          select occurred_at, 'KILL' as kind, player_name, '討伐した' as action_text,
+                 target_entity_type as detail_text, player_position_x as x, player_position_y as y, player_position_z as z
+          from t_entity_kill_transaction
+          where player_id = ?
+          union all
+          select occurred_at, transaction_type as kind, player_name, '眠っていた敵を起こした' as action_text,
+                 entity_class as detail_text, coalesce(player_position_x, position_x) as x,
+                 coalesce(player_position_y, position_y) as y, coalesce(player_position_z, position_z) as z
+          from t_sleeper_transaction
+          where player_id = ?
+            and transaction_type <> 'SLEEPER_RESTORE'
+          union all
+          select occurred_at, event_type as kind, actor_player_name as player_name, 'イベントが発生した' as action_text,
+                 detail_text, position_x as x, position_y as y, position_z as z
+          from t_world_event_transaction
+          where player_id = ?
+        ) entries
+        order by occurred_at desc
+        limit 40
+        """, (rs, rowNum) -> new TravelEntry(
+        toDisplayTime(rs.getObject("occurred_at")),
+        rs.getString("kind"),
+        displayPlayer(rs.getString("player_name")),
+        rs.getString("action_text"),
+        rs.getString("detail_text"),
+        eventMessageFormatter.format(
+            rs.getString("kind"),
+            displayPlayer(rs.getString("player_name")),
+            rs.getString("action_text"),
+            rs.getString("detail_text"),
+            ""),
+        "",
+        coordinate(rs.getObject("x"), rs.getObject("y"), rs.getObject("z"))), playerId, playerId, playerId, playerId, playerId);
+  }
+
+  private List<PositionEntry> playerPositionEntries(Long playerId) {
+    return jdbcTemplate.query("""
+        select occurred_at, position_source_type, inference_method, position_x, position_y, position_z
+        from t_player_position_transaction
+        where player_id = ?
+        order by occurred_at desc
+        limit 80
+        """, (rs, rowNum) -> new PositionEntry(
+        toDisplayTime(rs.getObject("occurred_at")),
+        rs.getString("position_source_type"),
+        rs.getString("inference_method"),
+        coordinate(rs.getObject("position_x"), rs.getObject("position_y"), rs.getObject("position_z"))), playerId);
+  }
+
   private List<KillLeader> killLeaders() {
     return jdbcTemplate.query("""
         select player_name, count(*) as kills
@@ -524,6 +716,7 @@ public class DashboardViewService {
   }
 
   public record PlayerStatus(
+      Long playerId,
       String playerName,
       String worldName,
       String gameName,
@@ -536,6 +729,21 @@ public class DashboardViewService {
       Integer level,
       Integer ping,
       Boolean online
+  ) {
+  }
+
+  public record PlayerDetailView(
+      PlayerStatus status,
+      List<TravelEntry> timelineEntries,
+      List<PositionEntry> positionEntries
+  ) {
+  }
+
+  public record PositionEntry(
+      String occurredAt,
+      String sourceType,
+      String inferenceMethod,
+      String coordinate
   ) {
   }
 

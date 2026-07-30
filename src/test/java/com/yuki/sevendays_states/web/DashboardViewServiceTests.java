@@ -25,6 +25,9 @@ class DashboardViewServiceTests {
   private DashboardViewService dashboardViewService;
 
   @Autowired
+  private PoiNameService poiNameService;
+
+  @Autowired
   private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
@@ -107,6 +110,37 @@ class DashboardViewServiceTests {
     assertThat(dashboard.playerStatuses().getFirst().level()).isEqualTo(3);
     assertThat(dashboard.playerStatuses().getFirst().coordinate()).isEqualTo("4, 5, 6");
     assertThat(dashboard.playerStatuses().getFirst().online()).isTrue();
+  }
+
+  @Test
+  void playerDetailUsesCurrentStateMatchedByExternalIdentity() {
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    jdbcTemplate.update("""
+        insert into m_player (id, player_key, platform, user_id, native_platform, native_user_id, player_name, last_seen_at)
+        values (1, 'EOS:eos-a', 'EOS', 'eos-a', 'Steam', 'steam-a', 'PlayerA', ?)
+        """, Timestamp.from(now.toInstant()));
+    jdbcTemplate.update("""
+        insert into t_player_state_snapshot (player_id, world_name, game_name, captured_at, last_login, x, y, z, source_hash)
+        values (1, 'World', 'Game', ?, ?, 10, 20, 30, 'snapshot-detail-current-state')
+        """, Timestamp.from(now.minusSeconds(90).toInstant()), Timestamp.from(now.minusSeconds(90).toInstant()));
+    jdbcTemplate.update("""
+        insert into t_player_current_state
+        (player_entity_id, player_name, position_x, position_y, position_z, health, deaths, level, ping,
+         platform_id, cross_platform_id, online, last_updated)
+        values (777, 'PlayerA', 40, 50, 60, 123, 2, 9, 6, 'Steam_steam-a', 'EOS_eos-a', true, ?)
+        """, now.minusSeconds(5));
+
+    DashboardViewService.PlayerDetailView detail = dashboardViewService.playerDetail(1L).orElseThrow();
+
+    assertThat(detail.status().health()).isEqualTo(123);
+    assertThat(detail.status().online()).isTrue();
+    assertThat(detail.status().coordinate()).isEqualTo("40, 50, 60");
+  }
+
+  @Test
+  void poiFallbackUsesJapaneseWordsForKnownPoiTokens() {
+    assertThat(poiNameService.displayName("countrytown_business_01"))
+        .isEqualTo("田舎町 事務所");
   }
 
   @Test

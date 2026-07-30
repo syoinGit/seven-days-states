@@ -168,6 +168,30 @@ body::before {
   overflow-wrap: anywhere;
 }
 
+.player-card h2 a,
+.nav-button {
+  color: inherit;
+  text-decoration: none;
+}
+
+.player-card h2 a:hover,
+.nav-button:hover {
+  color: var(--warn);
+}
+
+.nav-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid rgb(211 155 66 / 35%);
+  border-radius: 4px;
+  background: rgb(0 0 0 / 24%);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .player-card p {
   margin: 5px 0 0;
   color: var(--muted);
@@ -206,6 +230,10 @@ dd {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(360px, 0.9fr);
   gap: 18px;
+}
+
+.detail-summary {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .panel {
