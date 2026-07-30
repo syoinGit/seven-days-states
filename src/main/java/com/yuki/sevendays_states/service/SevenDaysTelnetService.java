@@ -5,15 +5,17 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
-import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.net.telnet.TelnetClient;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -39,17 +41,22 @@ public class SevenDaysTelnetService {
   private List<String> executeLpCommand() {
     List<String> lines = new ArrayList<>();
     LocalDateTime commandTime = LocalDateTime.now(ZoneOffset.UTC);
-    try (Socket socket = new Socket(properties.telnet().host(), properties.telnet().port())) {
-      socket.setSoTimeout(properties.telnet().readTimeoutMs());
+    TelnetClient telnet = new TelnetClient();
+    telnet.setConnectTimeout(properties.telnet().readTimeoutMs());
+    try {
+      telnet.connect(properties.telnet().host(), properties.telnet().port());
+      telnet.setSoTimeout(properties.telnet().readTimeoutMs());
       BufferedReader reader = new BufferedReader(
-          new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+          new InputStreamReader(telnet.getInputStream(), StandardCharsets.UTF_8));
       BufferedWriter writer = new BufferedWriter(
-          new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
+          new OutputStreamWriter(telnet.getOutputStream(), StandardCharsets.UTF_8));
 
       if (!properties.telnet().password().isBlank()) {
+        drainPrompt(reader);
         writer.write(properties.telnet().password());
         writer.newLine();
         writer.flush();
+        drainPrompt(reader);
       }
       writer.write("lp");
       writer.newLine();
@@ -75,11 +82,35 @@ public class SevenDaysTelnetService {
           break;
         }
       }
+    } catch (SocketTimeoutException e) {
+      if (lines.isEmpty()) {
+        log.warn("7DTD telnet lp command timed out before readable output. host={}, port={}",
+            properties.telnet().host(), properties.telnet().port(), e);
+      } else {
+        log.debug("7DTD telnet lp command timed out after partial output. lines={}", lines.size());
+      }
     } catch (Exception e) {
       log.warn("7DTD telnet lp command failed. host={}, port={}", properties.telnet().host(), properties.telnet().port(), e);
       return List.of();
+    } finally {
+      try {
+        telnet.disconnect();
+      } catch (Exception e) {
+        log.debug("7DTD telnet disconnect failed.", e);
+      }
     }
     return lines;
+  }
+
+  private void drainPrompt(BufferedReader reader) {
+    try {
+      long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(300);
+      while (System.nanoTime() < deadline && reader.ready()) {
+        reader.read();
+      }
+    } catch (Exception e) {
+      log.debug("7DTD telnet prompt drain skipped.", e);
+    }
   }
 
   static List<String> normalizeLpOutput(List<String> rawLines, LocalDateTime commandTime) {
