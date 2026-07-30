@@ -223,6 +223,28 @@ class GameLogParserTests {
   }
 
   @Test
+  void parsesCurrentTwoPlayerListPositionBlock() {
+    PlayerListPositionLogEvent event = new PlayerListPositionLogParser().parse(List.of(
+        "2026-07-30T12:00:31 3811.560 INF Executing command 'lp' by Telnet from 172.18.0.1:47050",
+        "0. id=171, 魅惑のこし餡ぼでぃ, pos=(450.6, 38.1, -675.8), rot=(-36.6, 877.5, 0.0), remote=True, health=137, deaths=1, zombies=815, players=0, score=742, level=33, pltfmid=Steam_76561198382915826, crossid=EOS_00024b5c4d2546468b7c6775bd927c32, ip=219.107.140.192, ping=5",
+        "1. id=485, hosi42861, pos=(-31.4, 38.1, -705.2), rot=(-28.5, 501.5, 0.0), remote=True, health=125, deaths=1, zombies=162, players=0, score=147, level=25, pltfmid=Steam_76561199276022302, crossid=EOS_0002d3425415470e9632296116cbcc0d, ip=122.131.33.98, ping=5",
+        "Total of 2 in the game"), 0)
+        .orElseThrow();
+
+    assertThat(event.players()).hasSize(2);
+    assertThat(event.players().get(0).playerName()).isEqualTo("魅惑のこし餡ぼでぃ");
+    assertThat(event.players().get(0).positionX()).isEqualTo(451);
+    assertThat(event.players().get(0).positionY()).isEqualTo(38);
+    assertThat(event.players().get(0).positionZ()).isEqualTo(-676);
+    assertThat(event.players().get(0).health()).isEqualTo(137);
+    assertThat(event.players().get(0).level()).isEqualTo(33);
+    assertThat(event.players().get(1).playerName()).isEqualTo("hosi42861");
+    assertThat(event.players().get(1).positionX()).isEqualTo(-31);
+    assertThat(event.players().get(1).positionZ()).isEqualTo(-705);
+    assertThat(event.players().get(1).health()).isEqualTo(125);
+  }
+
+  @Test
   void parsesEmptyPlayerListPositionBlock() {
     PlayerListPositionLogEvent event = new PlayerListPositionLogParser().parse(List.of(
         "2026-07-26T10:53:10 10455.738 INF Executing command 'lp' by Telnet from 172.18.0.1:32864",

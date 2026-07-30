@@ -339,6 +339,26 @@ class GameLogImportServiceTests {
   }
 
   @Test
+  void importsCurrentTwoPlayerListIntoCurrentState() throws Exception {
+    Path log = writeLog("""
+        2026-07-30T12:00:31 3811.560 INF Executing command 'lp' by Telnet from 172.18.0.1:47050
+        0. id=171, 魅惑のこし餡ぼでぃ, pos=(450.6, 38.1, -675.8), rot=(-36.6, 877.5, 0.0), remote=True, health=137, deaths=1, zombies=815, players=0, score=742, level=33, pltfmid=Steam_76561198382915826, crossid=EOS_00024b5c4d2546468b7c6775bd927c32, ip=219.107.140.192, ping=5
+        1. id=485, hosi42861, pos=(-31.4, 38.1, -705.2), rot=(-28.5, 501.5, 0.0), remote=True, health=125, deaths=1, zombies=162, players=0, score=147, level=25, pltfmid=Steam_76561199276022302, crossid=EOS_0002d3425415470e9632296116cbcc0d, ip=122.131.33.98, ping=5
+        Total of 2 in the game
+        """);
+
+    GameLogImportResult result = logImportService.importLogFile(log);
+
+    assertThat(result.playerListPositions()).isEqualTo(2);
+    assertThat(playerCurrentStateRepository.findAll())
+        .extracting(row -> row.getPlayerName() + ":" + row.getPositionX() + ":" + row.getPositionZ()
+            + ":" + row.getHealth() + ":" + row.getLevel() + ":" + row.isOnline())
+        .containsExactlyInAnyOrder(
+            "魅惑のこし餡ぼでぃ:451:-676:137:33:true",
+            "hosi42861:-31:-705:125:25:true");
+  }
+
+  @Test
   void assignsSleeperToNearestPlayerFromCurrentStateWhenLogContextHasNoPlayers() throws Exception {
     Path lpLog = writeLog("""
         2026-07-26T10:53:10 10455.738 INF Executing command 'lp' by Telnet from 172.18.0.1:32864
