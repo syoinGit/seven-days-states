@@ -72,6 +72,15 @@
     </article>
   </section>
 
+  <section class="metric-grid personal-metrics">
+    <article class="metric-card"><span>KILLS</span><strong th:text="${player.insights.kills}">0</strong><small>累計討伐</small></article>
+    <article class="metric-card"><span>ENCOUNTERS</span><strong th:text="${player.insights.encounters}">0</strong><small>スリーパー遭遇</small></article>
+    <article class="metric-card"><span>ACTIVE DAYS</span><strong th:text="${player.insights.activeDays}">0</strong><small>活動日数</small></article>
+    <article class="metric-card"><span>PLAY TIME</span><strong><span th:text="${player.insights.playMinutes / 60}">0</span>h</strong><small><span th:text="${player.insights.playMinutes % 60}">0</span>m / 完了セッション</small></article>
+  </section>
+
+  <article class="panel personal-activity-panel"><div class="panel-head"><h2>この冒険者の活動推移</h2><small th:text="${'愛用車両 ' + player.insights.favoriteVehicle}">活動履歴</small></div><div class="activity-chart compact-chart"><div class="activity-day" th:each="day : ${player.insights.dailyActivity}"><span th:text="${day.kills + ' KILL'}">0</span><div><i class="personal-bar" th:style="${'height:' + day.percentage + '%'}"></i></div><small th:text="${day.day}">day</small></div><p th:if="${#lists.isEmpty(player.insights.dailyActivity)}" class="empty">日別活動記録がありません。</p></div></article>
+
   <section class="main-grid">
     <article class="panel timeline-panel">
       <div class="panel-head">

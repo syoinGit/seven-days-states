@@ -235,6 +235,10 @@ class DashboardViewServiceTests {
     assertThat(detail.vehicles().getFirst().ownerName()).isEqualTo("PlayerA");
     assertThat(detail.vehicles().getFirst().vehicleCount()).isEqualTo(2);
     assertThat(detail.vehicles().getFirst().totalDistance()).isEqualByComparingTo("200.0");
+    assertThat(detail.summary().vehicleCount()).isEqualTo(2);
+    assertThat(detail.summary().activeCount()).isEqualTo(1);
+    assertThat(detail.typeRankings()).singleElement()
+        .satisfies(type -> assertThat(type.totalDistance()).isEqualByComparingTo("200.0"));
   }
 
   @Test
@@ -349,7 +353,9 @@ class DashboardViewServiceTests {
     assertThat(detail.growthTrend().killXp()).isEqualTo(50);
     assertThat(detail.growthTrend().harvestXp()).isEqualTo(30);
     assertThat(detail.growthTrend().lootXp()).isEqualTo(20);
-    assertThat(detail.growthTrend().killChartPoints()).isNotBlank();
+    assertThat(detail.growthTrend().totalXp()).isEqualTo(100);
+    assertThat(detail.growthTrend().totalChartPoints()).isNotBlank();
+    assertThat(detail.scoreChart().series()).isNotEmpty();
   }
 
   @Test
@@ -508,6 +514,8 @@ class DashboardViewServiceTests {
     assertThat(detail.status().health()).isEqualTo(123);
     assertThat(detail.status().online()).isTrue();
     assertThat(detail.status().coordinate()).isEqualTo("40, 50, 60");
+    assertThat(detail.insights().kills()).isZero();
+    assertThat(detail.insights().favoriteVehicle()).isEqualTo("未記録");
   }
 
   @Test
