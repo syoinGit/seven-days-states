@@ -864,14 +864,15 @@ public class DashboardViewService {
         rs.getString("target_name"),
         coordinate(rs.getObject("player_position_x"), rs.getObject("player_position_y"),
             rs.getObject("player_position_z"))));
+    List<SessionEvent> sessionEvents = sessionEvents();
     return new KillDetailView(
-        adventureRankings(),
+        adventureRankings(sessionEvents),
         recent,
         dailyActivity(),
         dailyKillActivity(),
         defeatedEnemyRankings(),
         growthTrend(),
-        adventureScoreTrend());
+        adventureScoreTrend(sessionEvents));
   }
 
   private List<DefeatedEnemyRanking> defeatedEnemyRankings() {
@@ -962,9 +963,13 @@ public class DashboardViewService {
   }
 
   private List<AdventureRanking> adventureRankings() {
+    return adventureRankings(sessionEvents());
+  }
+
+  private List<AdventureRanking> adventureRankings(List<SessionEvent> sessionEvents) {
     Map<String, Long> kills = new HashMap<>();
     killLeaders().forEach(row -> kills.put(row.playerName(), row.kills()));
-    Map<String, Long> playMinutes = playMinutesByPlayer();
+    Map<String, Long> playMinutes = playMinutesByPlayer(sessionEvents);
     return playerStatuses().stream()
         .map(player -> new AdventureRanking(
             player.playerId(),
@@ -990,19 +995,10 @@ public class DashboardViewService {
   }
 
   private Map<String, Long> playMinutesByPlayer() {
-    List<SessionEvent> events = jdbcTemplate.query("""
-        select occurred_at, event_kind, player_name
-        from (
-          select occurred_at, 'JOIN' as event_kind, player_name from t_player_join_transaction
-          union all
-          select occurred_at, 'LEAVE' as event_kind, player_name from t_player_leave_transaction
-        ) session_events
-        order by occurred_at
-        limit 5000
-        """, (rs, rowNum) -> new SessionEvent(
-        rs.getObject("occurred_at", OffsetDateTime.class),
-        rs.getString("event_kind"),
-        rs.getString("player_name")));
+    return playMinutesByPlayer(sessionEvents());
+  }
+
+  private Map<String, Long> playMinutesByPlayer(List<SessionEvent> events) {
     Map<String, Deque<OffsetDateTime>> openSessions = new HashMap<>();
     Map<String, Long> minutes = new HashMap<>();
     for (SessionEvent event : events) {
@@ -1020,7 +1016,7 @@ public class DashboardViewService {
     return minutes;
   }
 
-  private ScoreChart adventureScoreTrend() {
+  private ScoreChart adventureScoreTrend(List<SessionEvent> sessions) {
     List<ScoreEvent> scoreEvents = jdbcTemplate.query("""
         select occurred_at, player_name, score_delta from (
           select occurred_at, player_name, cast(100 as numeric) as score_delta
@@ -1040,7 +1036,6 @@ public class DashboardViewService {
         rs.getObject("occurred_at", OffsetDateTime.class), rs.getString("player_name"),
         rs.getBigDecimal("score_delta")));
     scoreEvents = new ArrayList<>(scoreEvents);
-    List<SessionEvent> sessions = sessionEvents();
     Map<String, Deque<OffsetDateTime>> openSessions = new HashMap<>();
     for (SessionEvent event : sessions) {
       if ("JOIN".equals(event.kind())) {
@@ -1261,18 +1256,91 @@ public class DashboardViewService {
   public ServerDetailView serverDetail() {
     List<PlayerStatus> players = playerStatuses();
     ServerState current = withOnlinePlayerCount(latestServerState());
-    List<ServerMetricPoint> history = jdbcTemplate.query("""
+    List<ServerMetricObservation> observations = jdbcTemplate.query("""
         select occurred_at, fps, zombie_count, entity_count, rss_mb
         from t_server_metric
         order by occurred_at desc
         limit 120
-        """, (rs, rowNum) -> new ServerMetricPoint(
-        toDisplayTime(rs.getObject("occurred_at")),
+        """, (rs, rowNum) -> new ServerMetricObservation(
+        rs.getObject("occurred_at", OffsetDateTime.class),
         rs.getBigDecimal("fps"),
         integer(rs, "zombie_count"),
         integer(rs, "entity_count"),
         rs.getBigDecimal("rss_mb")));
-    return new ServerDetailView(current, players, history);
+    List<ServerMetricPoint> history = observations.stream().map(row -> new ServerMetricPoint(
+        displayTimeFormatter.format(row.occurredAt()), row.fps(), row.zombieCount(),
+        row.entityCount(), row.rssMb())).toList();
+    return new ServerDetailView(current, players, history, serverHealth(observations));
+  }
+
+  private ServerHealth serverHealth(List<ServerMetricObservation> newestFirst) {
+    if (newestFirst.isEmpty()) {
+      return new ServerHealth(
+          "unknown", "観測待ち", 0, null, null, null, "", "", "", "", List.of());
+    }
+    List<ServerMetricObservation> chronological = new ArrayList<>(newestFirst);
+    java.util.Collections.reverse(chronological);
+    List<BigDecimal> fpsValues = chronological.stream().map(ServerMetricObservation::fps)
+        .filter(java.util.Objects::nonNull).toList();
+    BigDecimal averageFps = fpsValues.isEmpty() ? null : fpsValues.stream()
+        .reduce(BigDecimal.ZERO, BigDecimal::add)
+        .divide(BigDecimal.valueOf(fpsValues.size()), 1, RoundingMode.HALF_UP);
+    BigDecimal minimumFps = fpsValues.stream().min(BigDecimal::compareTo).orElse(null);
+    BigDecimal maximumRss = chronological.stream().map(ServerMetricObservation::rssMb)
+        .filter(java.util.Objects::nonNull).max(BigDecimal::compareTo).orElse(null);
+    long stableSamples = fpsValues.stream()
+        .filter(fps -> fps.compareTo(BigDecimal.valueOf(18)) >= 0).count();
+    long stability = fpsValues.isEmpty() ? 0 : stableSamples * 100 / fpsValues.size();
+    List<ServerIncident> incidents = new ArrayList<>();
+    ServerMetricObservation previous = null;
+    for (ServerMetricObservation point : chronological) {
+      List<String> reasons = new ArrayList<>();
+      if (point.fps() != null && point.fps().compareTo(BigDecimal.valueOf(15)) < 0) {
+        reasons.add("FPS低下 " + point.fps());
+      }
+      if (previous != null && point.rssMb() != null && previous.rssMb() != null
+          && point.rssMb().subtract(previous.rssMb()).compareTo(BigDecimal.valueOf(256)) >= 0) {
+        reasons.add("メモリ急増 +" + point.rssMb().subtract(previous.rssMb()).setScale(0, RoundingMode.HALF_UP) + "MB");
+      }
+      if (!reasons.isEmpty()) {
+        incidents.add(new ServerIncident(
+            displayTimeFormatter.format(point.occurredAt()), String.join(" / ", reasons)));
+      }
+      previous = point;
+    }
+    if (incidents.size() > 8) {
+      incidents = incidents.subList(incidents.size() - 8, incidents.size());
+    }
+    String level = stability >= 90 && incidents.isEmpty() ? "stable"
+        : stability >= 70 ? "watch" : "unstable";
+    String label = switch (level) {
+      case "stable" -> "安定稼働";
+      case "watch" -> "一部変動あり";
+      default -> "不安定区間あり";
+    };
+    BigDecimal fpsMax = fpsValues.stream().max(BigDecimal::compareTo).orElse(BigDecimal.ONE);
+    List<BigDecimal> rssValues = chronological.stream().map(ServerMetricObservation::rssMb)
+        .filter(java.util.Objects::nonNull).toList();
+    BigDecimal rssMax = rssValues.stream().max(BigDecimal::compareTo).orElse(BigDecimal.ONE);
+    return new ServerHealth(
+        level, label, stability, averageFps, minimumFps, maximumRss,
+        metricChartPoints(chronological, fpsMax, ServerMetricObservation::fps),
+        metricChartPoints(chronological, rssMax, ServerMetricObservation::rssMb),
+        displayTimeFormatter.format(chronological.getFirst().occurredAt()),
+        displayTimeFormatter.format(chronological.getLast().occurredAt()),
+        List.copyOf(incidents));
+  }
+
+  private String metricChartPoints(
+      List<ServerMetricObservation> rows, BigDecimal max,
+      java.util.function.Function<ServerMetricObservation, BigDecimal> value) {
+    int lastIndex = Math.max(1, rows.size() - 1);
+    return java.util.stream.IntStream.range(0, rows.size()).mapToObj(index -> {
+      BigDecimal metric = value.apply(rows.get(index));
+      double x = index * 300.0 / lastIndex;
+      double y = metric == null ? 76 : 76 - metric.doubleValue() * 68 / max.max(BigDecimal.ONE).doubleValue();
+      return String.format(java.util.Locale.ROOT, "%.1f,%.1f", x, y);
+    }).collect(java.util.stream.Collectors.joining(" "));
   }
 
   private BloodMoonStatus latestBloodMoon(WorldTimeStatus worldTime) {
@@ -1601,8 +1669,24 @@ public class DashboardViewService {
   public record ServerDetailView(
       ServerState current,
       List<PlayerStatus> players,
-      List<ServerMetricPoint> history
+      List<ServerMetricPoint> history,
+      ServerHealth health
   ) {
+  }
+
+  public record ServerHealth(
+      String level, String label, long stabilityPercent,
+      BigDecimal averageFps, BigDecimal minimumFps, BigDecimal maximumRss,
+      String fpsChartPoints, String rssChartPoints, String firstObservedAt,
+      String lastObservedAt, List<ServerIncident> incidents) {
+  }
+
+  public record ServerIncident(String occurredAt, String reason) {
+  }
+
+  private record ServerMetricObservation(
+      OffsetDateTime occurredAt, BigDecimal fps, Integer zombieCount,
+      Integer entityCount, BigDecimal rssMb) {
   }
 
   public record ServerState(

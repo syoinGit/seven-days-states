@@ -38,13 +38,11 @@ class DashboardControllerTests {
     ConcurrentModel killModel = new ConcurrentModel();
     ConcurrentModel vehicleModel = new ConcurrentModel();
     ConcurrentModel explorationModel = new ConcurrentModel();
-    ConcurrentModel aiCommentModel = new ConcurrentModel();
 
     assertThat(controller.server(serverModel)).isEqualTo("server-detail");
     assertThat(controller.kills(killModel)).isEqualTo("kill-detail");
     assertThat(controller.vehicles(vehicleModel)).isEqualTo("vehicle-detail");
     assertThat(controller.exploration(explorationModel)).isEqualTo("exploration-detail");
-    assertThat(controller.aiComments(aiCommentModel)).isEqualTo("redirect:/diaries");
     assertThat(serverModel).containsKey("server");
     assertThat(killModel).containsKey("kills");
     assertThat(vehicleModel).containsKey("vehicles");

@@ -210,8 +210,28 @@ class DashboardViewServiceTests {
         """);
 
     assertThat(dashboardViewService.serverDetail().history()).hasSize(1);
+    assertThat(dashboardViewService.serverDetail().health().label()).isEqualTo("安定稼働");
     assertThat(dashboardViewService.killDetail().recentKills()).hasSize(1);
     assertThat(dashboardViewService.vehicleDetail().vehicles()).hasSize(1);
+  }
+
+  @Test
+  void serverHealthHighlightsLowFpsAndRapidMemoryGrowth() {
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    jdbcTemplate.update("""
+        insert into t_server_metric
+        (occurred_at, fps, zombie_count, entity_count, rss_mb, source_file, source_log_hash)
+        values (?, 20, 2, 10, 1000, 'log', 'health-stable'),
+               (?, 10, 20, 80, 1400, 'log', 'health-unstable')
+        """, now.minusMinutes(2), now.minusMinutes(1));
+
+    DashboardViewService.ServerHealth health = dashboardViewService.serverDetail().health();
+
+    assertThat(health.level()).isEqualTo("unstable");
+    assertThat(health.minimumFps()).isEqualByComparingTo("10");
+    assertThat(health.incidents()).isNotEmpty();
+    assertThat(health.fpsChartPoints()).isNotBlank();
+    assertThat(health.rssChartPoints()).isNotBlank();
   }
 
   @Test

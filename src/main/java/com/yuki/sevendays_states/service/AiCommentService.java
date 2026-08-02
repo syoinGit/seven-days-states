@@ -21,10 +21,6 @@ public class AiCommentService {
   @Value("${app.ai-comment.editor-key:}")
   private String editorKey;
 
-  public Optional<AiCommentEntry> latest() {
-    return repository.findTopByOrderByPublishedAtDescIdDesc().map(this::toEntry);
-  }
-
   public Optional<AiCommentEntry> latestDiary() {
     return repository.findTopByDiaryDateIsNotNullOrderByDiaryDateDescPublishedAtDesc()
         .map(this::toEntry);
@@ -36,21 +32,12 @@ public class AiCommentService {
         .toList();
   }
 
-  public List<AiCommentEntry> history() {
-    return repository.findTop50ByOrderByPublishedAtDescIdDesc().stream().map(this::toEntry).toList();
-  }
-
   public Optional<AiCommentEntry> findByDiaryDate(LocalDate diaryDate) {
     return repository.findByDiaryDate(diaryDate).map(this::toEntry);
   }
 
   public boolean editorEnabled() {
     return editorKey != null && !editorKey.isBlank();
-  }
-
-  @Transactional
-  public AiCommentEntry publish(String title, String body, String submittedEditorKey) {
-    return publish(null, title, body, submittedEditorKey);
   }
 
   @Transactional

@@ -60,11 +60,6 @@ public class DashboardController {
     return "exploration-detail";
   }
 
-  @GetMapping("/ai-comments")
-  public String aiComments(Model model) {
-    return "redirect:/diaries";
-  }
-
   @GetMapping("/diaries")
   public String diaries(Model model) {
     model.addAttribute("diaries", diaryViewService.archive());
@@ -77,12 +72,6 @@ public class DashboardController {
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     model.addAttribute("diary", diary);
     return "diary-detail";
-  }
-
-  @PostMapping("/ai-comments")
-  public String publishAiComment(RedirectAttributes redirectAttributes) {
-    redirectAttributes.addFlashAttribute("error", "AIコメントは日別冒険日記から登録してください。");
-    return "redirect:/maintenance/diaries";
   }
 
   @GetMapping("/maintenance/diaries")
