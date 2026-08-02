@@ -51,10 +51,12 @@ public class EventMessageFormatter {
     if ("LEAVE".equals(kind)) {
       return safeActor + "がログアウトした";
     }
-    if ("MOVE".equals(kind)) {
+    if ("VEHICLE_MOVE".equals(kind)) {
       String destination = poiName == null || poiName.isBlank() ? "荒野" : poiName;
-      String distance = detailText == null || detailText.isBlank() ? "" : detailText;
-      return safeActor + "が" + destination + "で" + distance + "移動！";
+      String[] movement = detailText == null ? new String[0] : detailText.split("\\|", 2);
+      String vehicle = movement.length > 0 && !movement[0].isBlank() ? movement[0] : "乗り物";
+      String distance = movement.length > 1 && !movement[1].isBlank() ? movement[1] + " m" : "";
+      return safeActor + "が" + destination + "で" + vehicle + "に乗って" + distance + "移動！";
     }
     if ("SLEEPER_RESTORE".equals(kind)) {
       return "眠っていた敵が再配置された";

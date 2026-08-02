@@ -466,25 +466,29 @@ public class DashboardViewService {
           from t_sleeper_transaction s
           where transaction_type <> 'SLEEPER_RESTORE'
           union all
-          select m.occurred_at,
-                 'MOVE' as kind,
-                 m.player_name,
+          select v.occurred_at,
+                 'VEHICLE_MOVE' as kind,
+                 p.player_name,
                  '移動した' as action_text,
-                 cast(round(m.movement_distance, 1) as varchar) || ' m ' as detail_text,
+                 coalesce(v.vehicle_name, v.vehicle_type) || '|' ||
+                   cast(round(v.movement_distance, 1) as varchar) as detail_text,
                  (
                    select poi.poi_name
                    from m_world_poi poi
                    where coalesce(poi.category, '') <> 'part'
                      and poi.poi_name not like 'part_%'
-                   order by ((poi.x - m.position_x) * (poi.x - m.position_x)
-                         + (poi.z - m.position_z) * (poi.z - m.position_z))
+                   order by ((poi.x - v.position_x) * (poi.x - v.position_x)
+                         + (poi.z - v.position_z) * (poi.z - v.position_z))
                    limit 1
                  ) as poi_name,
-                 m.position_x as x,
-                 m.position_y as y,
-                 m.position_z as z
-          from t_player_position_transaction m
-          where m.movement_distance >= 1
+                 v.position_x as x,
+                 v.position_y as y,
+                 v.position_z as z
+          from t_vehicle_position_transaction v
+          join m_player p on p.id = v.owner_player_id
+              or (v.owner_player_id is null and v.owner_cross_platform_id is not null
+                  and p.player_key = 'EOS:' || replace(v.owner_cross_platform_id, 'EOS_', ''))
+          where v.movement_distance >= 1
           union all
           select occurred_at,
                  'XP' as kind,
@@ -555,6 +559,7 @@ public class DashboardViewService {
                   and v.owner_cross_platform_id is not null
                   and p.player_key = 'EOS:' || replace(v.owner_cross_platform_id, 'EOS_', ''))
           where v.event_type in ('VEHICLE_REMOVED', 'VEHICLE_LOADED', 'VEHICLE_POST_INIT')
+            and (v.movement_distance < 1 or v.event_type = 'VEHICLE_REMOVED')
         ) entries
         order by occurred_at desc
         limit 120
@@ -603,7 +608,7 @@ public class DashboardViewService {
       case "JOIN" -> "login";
       case "LEAVE" -> "logout";
       case "KILL" -> "combat";
-      case "MOVE", "VEHICLE_LOADED", "VEHICLE_POST_INIT", "VEHICLE_REMOVED" -> "movement";
+      case "VEHICLE_MOVE", "VEHICLE_LOADED", "VEHICLE_POST_INIT", "VEHICLE_REMOVED" -> "movement";
       case "SLEEPER_SPAWN", "WANDERING_HORDE", "SCOUT_HORDE", "SCREAMER_SPAWN" -> "warning";
       case "XP" -> "exploration";
       default -> "neutral";

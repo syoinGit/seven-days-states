@@ -159,6 +159,37 @@ class DashboardViewServiceTests {
   }
 
   @Test
+  void timelineShowsOwnedVehicleMovementButNotAmbiguousPlayerMovement() {
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    jdbcTemplate.update("""
+        insert into m_player (id, player_key, platform, user_id, player_name)
+        values (1, 'EOS:eos-a', 'EOS', 'eos-a', 'PlayerA')
+        """);
+    jdbcTemplate.update("""
+        insert into t_player_position_transaction
+        (occurred_at, player_name, player_entity_id, player_id, position_x, position_y, position_z,
+         position_source_type, movement_distance, source_event_hash, source_file)
+        values (?, 'PlayerA', 101, 1, 100, 30, 100, 'LP_COMMAND', 25.0, 'ambiguous-walk', 'telnet')
+        """, now.minusMinutes(2));
+    jdbcTemplate.update("""
+        insert into t_vehicle_position_transaction
+        (occurred_at, event_type, vehicle_entity_id, vehicle_type, vehicle_name, owner_player_id,
+         position_x, position_y, position_z, movement_distance, source_file, source_log_hash, raw_line)
+        values (?, 'VEHICLE_LOADED', 99, 'EntityMotorcycle', 'オートバイ', 1,
+                200, 30, 200, 42.5, 'log', 'vehicle-move-only', 'raw')
+        """, now.minusMinutes(1));
+
+    DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
+
+    assertThat(dashboard.travelEntries())
+        .extracting(DashboardViewService.TravelEntry::kind)
+        .contains("VEHICLE_MOVE")
+        .doesNotContain("MOVE");
+    assertThat(dashboard.travelEntries().getFirst().message())
+        .contains("オートバイに乗って42.5 m移動");
+  }
+
+  @Test
   void explorationMarksPoiVisitedWhenPositionPassedWithinEightyMeters() {
     jdbcTemplate.update("""
         insert into m_world_poi
@@ -518,7 +549,8 @@ class DashboardViewServiceTests {
 
     assertThat(dashboard.travelEntries())
         .extracting(DashboardViewService.TravelEntry::kind)
-        .contains("AIR_DROP", "VEHICLE_LOADED");
+        .contains("AIR_DROP", "VEHICLE_MOVE")
+        .doesNotContain("MOVE");
     assertThat(dashboard.vehicleStatuses()).hasSize(1);
     assertThat(dashboard.vehicleStatuses().getFirst().ownerName()).isEqualTo("PlayerA");
     assertThat(dashboard.vehicleStatuses().getFirst().vehicleCount()).isEqualTo(1);
