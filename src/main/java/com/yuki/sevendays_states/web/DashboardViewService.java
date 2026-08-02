@@ -379,10 +379,68 @@ public class DashboardViewService {
     if (statuses.isEmpty()) {
       return Optional.empty();
     }
+    PlayerStatus status = statuses.getFirst();
     return Optional.of(new PlayerDetailView(
-        statuses.getFirst(),
+        status,
+        playerInsights(playerId, status.playerName()),
         playerTimelineEntries(playerId),
         playerPositionEntries(playerId)));
+  }
+
+  private PlayerInsights playerInsights(Long playerId, String playerName) {
+    long kills = countForPlayer("t_entity_kill_transaction", playerId);
+    Long encounterCount = jdbcTemplate.queryForObject("""
+        select count(*) from t_sleeper_transaction
+        where player_id = ? and transaction_type = 'SLEEPER_SPAWN'
+        """, Long.class, playerId);
+    long encounters = encounterCount == null ? 0 : encounterCount;
+    Long activeDays = jdbcTemplate.queryForObject("""
+        select count(distinct activity_day) from (
+          select cast(occurred_at as date) as activity_day from t_player_join_transaction where player_id = ?
+          union select cast(occurred_at as date) from t_player_position_transaction where player_id = ?
+          union select cast(occurred_at as date) from t_entity_kill_transaction where player_id = ?
+        ) days
+        """, Long.class, playerId, playerId, playerId);
+    String favoriteVehicle = jdbcTemplate.query("""
+        select coalesce(v.vehicle_name, v.vehicle_type) as vehicle_name
+        from t_vehicle_position_transaction v
+        where v.owner_player_id = ?
+        group by coalesce(v.vehicle_name, v.vehicle_type)
+        order by sum(v.movement_distance) desc limit 1
+        """, rs -> rs.next() ? rs.getString("vehicle_name") : "未記録", playerId);
+    List<PlayerDailyActivity> daily = jdbcTemplate.query("""
+        select activity_day, sum(kills) as kills, sum(distance) as distance from (
+          select cast(occurred_at as date) as activity_day, count(*) as kills, cast(0 as numeric) as distance
+          from t_entity_kill_transaction where player_id = ? group by cast(occurred_at as date)
+          union all
+          select cast(occurred_at as date), 0, coalesce(sum(movement_distance), 0)
+          from t_player_position_transaction where player_id = ? group by cast(occurred_at as date)
+          union all
+          select cast(v.occurred_at as date), 0, coalesce(sum(v.movement_distance), 0)
+          from t_vehicle_position_transaction v where v.owner_player_id = ? group by cast(v.occurred_at as date)
+        ) activity group by activity_day order by activity_day desc limit 14
+        """, (rs, rowNum) -> new PlayerDailyActivity(
+        rs.getObject("activity_day").toString(), rs.getLong("kills"),
+        rs.getBigDecimal("distance"), 0), playerId, playerId, playerId);
+    daily = new ArrayList<>(daily);
+    java.util.Collections.reverse(daily);
+    long maxScore = daily.stream().mapToLong(day -> day.kills() * 100
+        + day.distance().divide(BigDecimal.valueOf(100), 0, RoundingMode.DOWN).longValue()).max().orElse(1);
+    List<PlayerDailyActivity> chart = daily.stream().map(day -> {
+      long score = day.kills() * 100
+          + day.distance().divide(BigDecimal.valueOf(100), 0, RoundingMode.DOWN).longValue();
+      return new PlayerDailyActivity(
+          day.day(), day.kills(), day.distance(), Math.max(4, score * 100 / Math.max(1, maxScore)));
+    }).toList();
+    return new PlayerInsights(
+        kills, encounters, activeDays == null ? 0 : activeDays,
+        playMinutesByPlayer().getOrDefault(playerName, 0L), favoriteVehicle, chart);
+  }
+
+  private long countForPlayer(String table, Long playerId) {
+    Long count = jdbcTemplate.queryForObject(
+        "select count(*) from " + table + " where player_id = ?", Long.class, playerId);
+    return count == null ? 0 : count;
   }
 
   private List<TravelEntry> travelEntries() {
@@ -812,7 +870,8 @@ public class DashboardViewService {
         dailyActivity(),
         dailyKillActivity(),
         defeatedEnemyRankings(),
-        growthTrend());
+        growthTrend(),
+        adventureScoreTrend());
   }
 
   private List<DefeatedEnemyRanking> defeatedEnemyRankings() {
@@ -874,15 +933,17 @@ public class DashboardViewService {
     private long kills;
     private long loot;
     private long harvest;
+    private long total;
     private final List<GrowthPoint> points = new ArrayList<>();
 
     private void add(GrowthReport report) {
       kills += report.killXp();
       loot += report.lootXp();
       harvest += report.harvestXp();
+      total += report.killXp() + report.lootXp() + report.harvestXp();
       points.add(new GrowthPoint(
           report.occurredAt().atZoneSameInstant(DisplayTimeFormatter.JST).toLocalDate().toString(),
-          kills, harvest, loot));
+          total));
     }
 
     private GrowthTrend toTrend() {
@@ -892,12 +953,9 @@ public class DashboardViewService {
               .map(index -> index * (points.size() - 1) / 29)
               .mapToObj(points::get)
               .toList();
-      long maxXp = Math.max(kills, Math.max(harvest, loot));
       return new GrowthTrend(
-          kills, loot, harvest, points.size(),
-          growthChartPoints(visiblePoints, maxXp, GrowthPoint::killXp),
-          growthChartPoints(visiblePoints, maxXp, GrowthPoint::harvestXp),
-          growthChartPoints(visiblePoints, maxXp, GrowthPoint::lootXp),
+          total, kills, loot, harvest, points.size(),
+          growthChartPoints(visiblePoints, total, GrowthPoint::totalXp),
           visiblePoints.isEmpty() ? "" : visiblePoints.getFirst().date(),
           visiblePoints.isEmpty() ? "" : visiblePoints.getLast().date());
     }
@@ -962,6 +1020,93 @@ public class DashboardViewService {
     return minutes;
   }
 
+  private ScoreChart adventureScoreTrend() {
+    List<ScoreEvent> scoreEvents = jdbcTemplate.query("""
+        select occurred_at, player_name, score_delta from (
+          select occurred_at, player_name, cast(100 as numeric) as score_delta
+          from t_entity_kill_transaction
+          union all
+          select occurred_at, player_name, movement_distance / 100 as score_delta
+          from t_player_position_transaction where movement_distance > 0
+          union all
+          select v.occurred_at, p.player_name, v.movement_distance / 100 as score_delta
+          from t_vehicle_position_transaction v
+          join m_player p on p.id = v.owner_player_id
+          where v.movement_distance > 0
+        ) score_events
+        where player_name is not null and player_name <> ''
+        order by occurred_at
+        """, (rs, rowNum) -> new ScoreEvent(
+        rs.getObject("occurred_at", OffsetDateTime.class), rs.getString("player_name"),
+        rs.getBigDecimal("score_delta")));
+    scoreEvents = new ArrayList<>(scoreEvents);
+    List<SessionEvent> sessions = sessionEvents();
+    Map<String, Deque<OffsetDateTime>> openSessions = new HashMap<>();
+    for (SessionEvent event : sessions) {
+      if ("JOIN".equals(event.kind())) {
+        openSessions.computeIfAbsent(event.playerName(), ignored -> new ArrayDeque<>())
+            .addLast(event.occurredAt());
+        continue;
+      }
+      Deque<OffsetDateTime> joins = openSessions.get(event.playerName());
+      if (joins == null || joins.isEmpty()) {
+        continue;
+      }
+      long minutes = Math.min(720, Math.max(0,
+          Duration.between(joins.removeFirst(), event.occurredAt()).toMinutes()));
+      scoreEvents.add(new ScoreEvent(
+          event.occurredAt(), event.playerName(), BigDecimal.valueOf(minutes)));
+    }
+    scoreEvents.sort(Comparator.comparing(ScoreEvent::occurredAt));
+    if (scoreEvents.isEmpty()) {
+      return new ScoreChart(List.of(), "", "");
+    }
+    Map<String, List<ScorePoint>> pointsByPlayer = new HashMap<>();
+    Map<String, BigDecimal> totals = new HashMap<>();
+    for (ScoreEvent event : scoreEvents) {
+      BigDecimal total = totals.merge(event.playerName(), event.scoreDelta(), BigDecimal::add);
+      pointsByPlayer.computeIfAbsent(event.playerName(), ignored -> new ArrayList<>())
+          .add(new ScorePoint(event.occurredAt(), total));
+    }
+    OffsetDateTime first = scoreEvents.getFirst().occurredAt();
+    OffsetDateTime last = scoreEvents.getLast().occurredAt();
+    long maxScore = Math.max(1, totals.values().stream()
+        .mapToLong(BigDecimal::longValue).max().orElse(1));
+    List<ScoreSeries> series = totals.entrySet().stream()
+        .sorted(Map.Entry.<String, BigDecimal>comparingByValue().reversed())
+        .limit(6)
+        .map(entry -> new ScoreSeries(
+            entry.getKey(), entry.getValue().longValue(),
+            scoreSeriesPoints(pointsByPlayer.get(entry.getKey()), first, last, maxScore)))
+        .toList();
+    return new ScoreChart(
+        series,
+        first.atZoneSameInstant(DisplayTimeFormatter.JST).toLocalDate().toString(),
+        last.atZoneSameInstant(DisplayTimeFormatter.JST).toLocalDate().toString());
+  }
+
+  private String scoreSeriesPoints(
+      List<ScorePoint> points, OffsetDateTime first, OffsetDateTime last, long maxScore) {
+    long duration = Math.max(1, Duration.between(first, last).toSeconds());
+    return points.stream().map(point -> {
+      double x = Duration.between(first, point.occurredAt()).toSeconds() * 300.0 / duration;
+      double y = 76.0 - point.score().doubleValue() * 68.0 / maxScore;
+      return String.format(java.util.Locale.ROOT, "%.1f,%.1f", x, y);
+    }).collect(java.util.stream.Collectors.joining(" "));
+  }
+
+  private List<SessionEvent> sessionEvents() {
+    return jdbcTemplate.query("""
+        select occurred_at, event_kind, player_name from (
+          select occurred_at, 'JOIN' as event_kind, player_name from t_player_join_transaction
+          union all
+          select occurred_at, 'LEAVE' as event_kind, player_name from t_player_leave_transaction
+        ) session_events order by occurred_at limit 5000
+        """, (rs, rowNum) -> new SessionEvent(
+        rs.getObject("occurred_at", OffsetDateTime.class),
+        rs.getString("event_kind"), rs.getString("player_name")));
+  }
+
   private List<DailyActivity> dailyActivity() {
     List<DailyActivityCount> counts = jdbcTemplate.query("""
         select cast(occurred_at as date) as activity_day, count(*) as event_count
@@ -1003,7 +1148,43 @@ public class DashboardViewService {
   }
 
   public VehicleDetailView vehicleDetail() {
-    return new VehicleDetailView(vehicleStatuses());
+    List<VehicleStatus> vehicles = vehicleStatuses();
+    VehicleSummary summary = jdbcTemplate.queryForObject("""
+        select count(*) as vehicle_count,
+               sum(case when active = true then 1 else 0 end) as active_count,
+               count(distinct owner_player_id) as owner_count,
+               coalesce(sum(total_distance), 0) as total_distance
+        from t_vehicle_current_state where owner_player_id is not null
+        """, (rs, rowNum) -> new VehicleSummary(
+        rs.getLong("vehicle_count"), rs.getLong("active_count"),
+        rs.getLong("owner_count"), rs.getBigDecimal("total_distance")));
+    List<VehicleDailyDistance> daily = jdbcTemplate.query("""
+        select cast(occurred_at as date) as travel_day,
+               coalesce(sum(movement_distance), 0) as distance
+        from t_vehicle_position_transaction
+        where owner_player_id is not null and movement_distance > 0
+        group by cast(occurred_at as date)
+        order by travel_day desc limit 14
+        """, (rs, rowNum) -> new VehicleDailyDistance(
+        rs.getObject("travel_day").toString(), rs.getBigDecimal("distance"), 0));
+    daily = new ArrayList<>(daily);
+    java.util.Collections.reverse(daily);
+    BigDecimal maxDistance = daily.stream().map(VehicleDailyDistance::distance)
+        .max(BigDecimal::compareTo).orElse(BigDecimal.ONE);
+    List<VehicleDailyDistance> chart = daily.stream().map(day -> new VehicleDailyDistance(
+        day.day(), day.distance(), Math.max(4,
+        day.distance().multiply(BigDecimal.valueOf(100)).divide(
+            maxDistance.max(BigDecimal.ONE), 0, RoundingMode.HALF_UP).longValue()))).toList();
+    List<VehicleTypeRanking> types = jdbcTemplate.query("""
+        select coalesce(vehicle_name, vehicle_type) as vehicle_name,
+               count(*) as vehicle_count, coalesce(sum(total_distance), 0) as total_distance
+        from t_vehicle_current_state where owner_player_id is not null
+        group by coalesce(vehicle_name, vehicle_type)
+        order by total_distance desc
+        """, (rs, rowNum) -> new VehicleTypeRanking(
+        rs.getString("vehicle_name"), rs.getLong("vehicle_count"),
+        rs.getBigDecimal("total_distance")));
+    return new VehicleDetailView(vehicles, summary, chart, types);
   }
 
   public ExplorationDetailView explorationDetail() {
@@ -1264,9 +1445,19 @@ public class DashboardViewService {
 
   public record PlayerDetailView(
       PlayerStatus status,
+      PlayerInsights insights,
       List<TravelEntry> timelineEntries,
       List<PositionEntry> positionEntries
   ) {
+  }
+
+  public record PlayerInsights(
+      long kills, long encounters, long activeDays, long playMinutes,
+      String favoriteVehicle, List<PlayerDailyActivity> dailyActivity) {
+  }
+
+  public record PlayerDailyActivity(
+      String day, long kills, BigDecimal distance, long percentage) {
   }
 
   public record PositionEntry(
@@ -1313,7 +1504,8 @@ public class DashboardViewService {
       List<DailyActivity> dailyActivity,
       List<DailyActivity> dailyKills,
       List<DefeatedEnemyRanking> defeatedEnemies,
-      GrowthTrend growthTrend
+      GrowthTrend growthTrend,
+      ScoreChart scoreChart
   ) {
   }
 
@@ -1322,8 +1514,8 @@ public class DashboardViewService {
   }
 
   public record GrowthTrend(
-      long killXp, long lootXp, long harvestXp, long reports,
-      String killChartPoints, String harvestChartPoints, String lootChartPoints,
+      long totalXp, long killXp, long lootXp, long harvestXp, long reports,
+      String totalChartPoints,
       String firstDate, String lastDate) {
   }
 
@@ -1331,7 +1523,20 @@ public class DashboardViewService {
       OffsetDateTime occurredAt, long killXp, long lootXp, long harvestXp) {
   }
 
-  private record GrowthPoint(String date, long killXp, long harvestXp, long lootXp) {
+  private record GrowthPoint(String date, long totalXp) {
+  }
+
+  public record ScoreChart(List<ScoreSeries> series, String firstDate, String lastDate) {
+  }
+
+  public record ScoreSeries(String playerName, long score, String chartPoints) {
+  }
+
+  private record ScoreEvent(
+      OffsetDateTime occurredAt, String playerName, BigDecimal scoreDelta) {
+  }
+
+  private record ScorePoint(OffsetDateTime occurredAt, BigDecimal score) {
   }
 
   public record AdventureRanking(
@@ -1354,7 +1559,20 @@ public class DashboardViewService {
   public record DailyActivity(String day, long eventCount, long percentage) {
   }
 
-  public record VehicleDetailView(List<VehicleStatus> vehicles) {
+  public record VehicleDetailView(
+      List<VehicleStatus> vehicles, VehicleSummary summary,
+      List<VehicleDailyDistance> dailyDistances, List<VehicleTypeRanking> typeRankings) {
+  }
+
+  public record VehicleSummary(
+      long vehicleCount, long activeCount, long ownerCount, BigDecimal totalDistance) {
+  }
+
+  public record VehicleDailyDistance(String day, BigDecimal distance, long percentage) {
+  }
+
+  public record VehicleTypeRanking(
+      String vehicleName, long vehicleCount, BigDecimal totalDistance) {
   }
 
   public record PoiExploration(
