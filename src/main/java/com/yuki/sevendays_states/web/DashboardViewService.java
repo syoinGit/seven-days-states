@@ -4,8 +4,11 @@ import com.yuki.sevendays_states.config.SevenDaysDataProperties;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -24,16 +27,13 @@ public class DashboardViewService {
     List<PlayerStatus> playerStatuses = playerStatuses();
     List<TravelEntry> travelEntries = travelEntries();
     List<VehicleStatus> vehicleStatuses = vehicleStatuses();
-    List<PoiStatus> poiStatuses = poiStatuses();
-    List<KillLeader> killLeaders = killLeaders();
-    ServerState serverState = latestServerState();
+    ServerState serverState = withOnlinePlayerCount(latestServerState());
     return new DashboardView(
         playerStatuses,
         travelEntries,
         vehicleStatuses,
-        poiStatuses,
-        killLeaders,
         serverState,
+        latestBloodMoon(),
         aiComment(playerStatuses, travelEntries, vehicleStatuses, serverState));
   }
 
@@ -347,7 +347,7 @@ public class DashboardViewService {
   }
 
   private List<TravelEntry> travelEntries() {
-    return jdbcTemplate.query("""
+    List<TravelEntry> entries = jdbcTemplate.query("""
         select *
         from (
           select occurred_at,
@@ -474,6 +474,7 @@ public class DashboardViewService {
                  w.position_y as y,
                  w.position_z as z
           from t_world_event_transaction w
+          where w.event_type <> 'BLOOD_MOON'
           union all
           select v.occurred_at,
                  v.event_type as kind,
@@ -507,7 +508,7 @@ public class DashboardViewService {
           where v.event_type in ('VEHICLE_REMOVED', 'VEHICLE_LOADED', 'VEHICLE_POST_INIT')
         ) entries
         order by occurred_at desc
-        limit 30
+        limit 120
         """, (rs, rowNum) -> new TravelEntry(
         toDisplayTime(rs.getObject("occurred_at")),
         rs.getString("kind"),
@@ -522,6 +523,26 @@ public class DashboardViewService {
             displayEventPoi(rs.getString("poi_name"))),
         displayEventPoi(rs.getString("poi_name")),
         coordinate(rs.getObject("x"), rs.getObject("y"), rs.getObject("z"))));
+    return condenseTimeline(entries, 30);
+  }
+
+  private List<TravelEntry> condenseTimeline(List<TravelEntry> entries, int limit) {
+    List<TravelEntry> condensed = new ArrayList<>();
+    Set<String> playerMinuteBuckets = new HashSet<>();
+    for (TravelEntry entry : entries) {
+      boolean playerEvent = entry.actor() != null && !entry.actor().isBlank() && !"誰か".equals(entry.actor());
+      String minute = entry.occurredAt() == null || entry.occurredAt().length() < 16
+          ? entry.occurredAt()
+          : entry.occurredAt().substring(0, 16);
+      if (playerEvent && !playerMinuteBuckets.add(entry.actor() + "|" + minute)) {
+        continue;
+      }
+      condensed.add(entry);
+      if (condensed.size() == limit) {
+        break;
+      }
+    }
+    return List.copyOf(condensed);
   }
 
   private List<VehicleStatus> vehicleStatuses() {
@@ -542,7 +563,6 @@ public class DashboardViewService {
                 and v.owner_cross_platform_id is not null
                 and p.player_key = 'EOS:' || replace(v.owner_cross_platform_id, 'EOS_', ''))
         order by v.active desc, v.last_updated desc
-        limit 8
         """, (rs, rowNum) -> new VehicleStatus(
         rs.getInt("vehicle_entity_id"),
         rs.getString("vehicle_name"),
@@ -552,61 +572,6 @@ public class DashboardViewService {
         rs.getBigDecimal("total_distance"),
         booleanValue(rs, "active"),
         toDisplayTime(rs.getObject("last_updated"))));
-  }
-
-  private List<PoiStatus> poiStatuses() {
-    return jdbcTemplate.query("""
-        select poi_name, category, player_name, x, y, z, captured_at, sleeper_events
-        from (
-          select poi.poi_name,
-                 poi.category,
-	                 pp.player_name,
-	                 pp.position_x as x,
-	                 pp.position_y as y,
-	                 pp.position_z as z,
-	                 pp.occurred_at as captured_at,
-                 (
-                   select count(*)
-                   from t_sleeper_transaction st
-                   where ((poi.x - st.position_x) * (poi.x - st.position_x)
-                        + (poi.z - st.position_z) * (poi.z - st.position_z)) <= 2500
-                 ) as sleeper_events,
-                 row_number() over (
-	                   partition by pp.player_name
-	                   order by ((poi.x - pp.position_x) * (poi.x - pp.position_x)
-	                         + (poi.z - pp.position_z) * (poi.z - pp.position_z))
-	                 ) as poi_rank
-	          from (
-	            select player_name, last_updated as occurred_at, position_x, position_y, position_z
-	            from t_player_current_state
-	            union all
-	            select player_name, occurred_at, position_x, position_y, position_z
-	            from (
-	              select player_name, occurred_at, position_x, position_y, position_z,
-	                     row_number() over (partition by player_name order by occurred_at desc) as position_rank
-	              from t_player_position_transaction
-	            ) ranked_position
-	            where position_rank = 1
-	              and not exists (
-	                select 1
-	                from t_player_current_state current_state
-	                where current_state.player_name = ranked_position.player_name
-	              )
-	          ) pp
-          join m_world_poi poi on 1 = 1
-          where coalesce(poi.category, '') <> 'part'
-            and poi.poi_name not like 'part_%'
-        ) ranked_poi
-        where poi_rank = 1
-        order by captured_at desc, player_name
-        limit 12
-        """, (rs, rowNum) -> new PoiStatus(
-        displayPoi(rs.getString("poi_name")),
-        rs.getString("category"),
-        rs.getString("player_name"),
-        coordinate(rs.getObject("x"), rs.getObject("y"), rs.getObject("z")),
-        toDisplayTime(rs.getObject("captured_at")),
-        rs.getLong("sleeper_events")));
   }
 
   private List<TravelEntry> playerTimelineEntries(Long playerId) {
@@ -684,6 +649,29 @@ public class DashboardViewService {
         rs.getLong("kills")));
   }
 
+  public KillDetailView killDetail() {
+    List<KillEvent> recent = jdbcTemplate.query("""
+        select k.occurred_at, k.player_name,
+               coalesce((select tr.display_text from m_japanese_translation tr
+                         where tr.localization_key = k.target_entity_type limit 1),
+                        k.target_entity_type) as target_name,
+               k.player_position_x, k.player_position_y, k.player_position_z
+        from t_entity_kill_transaction k
+        order by k.occurred_at desc
+        limit 100
+        """, (rs, rowNum) -> new KillEvent(
+        toDisplayTime(rs.getObject("occurred_at")),
+        displayPlayer(rs.getString("player_name")),
+        rs.getString("target_name"),
+        coordinate(rs.getObject("player_position_x"), rs.getObject("player_position_y"),
+            rs.getObject("player_position_z"))));
+    return new KillDetailView(killLeaders(), recent);
+  }
+
+  public VehicleDetailView vehicleDetail() {
+    return new VehicleDetailView(vehicleStatuses());
+  }
+
   private ServerState latestServerState() {
     List<ServerState> states = jdbcTemplate.query("""
         select occurred_at, fps, player_count, zombie_count, entity_count, rss_mb
@@ -701,6 +689,52 @@ public class DashboardViewService {
       return new ServerState("", null, null, null, null, null);
     }
     return states.getFirst();
+  }
+
+  private ServerState withOnlinePlayerCount(ServerState state) {
+    OffsetDateTime freshAfter = OffsetDateTime.now(ZoneOffset.UTC)
+        .minusSeconds(properties.transaction().currentStateMaxAgeSeconds());
+    Integer onlinePlayers = jdbcTemplate.queryForObject("""
+        select count(distinct coalesce(
+          'PLAYER:' || player_id,
+          'EOS:' || replace(cross_platform_id, 'EOS_', ''),
+          'STEAM:' || replace(platform_id, 'Steam_', ''),
+          'ENTITY:' || player_entity_id
+        ))
+        from t_player_current_state
+        where online = true and last_updated >= ?
+        """, Integer.class, freshAfter);
+    return new ServerState(state.occurredAt(), state.fps(), onlinePlayers, state.zombieCount(),
+        state.entityCount(), state.rssMb());
+  }
+
+  public ServerDetailView serverDetail() {
+    List<PlayerStatus> players = playerStatuses();
+    ServerState current = withOnlinePlayerCount(latestServerState());
+    List<ServerMetricPoint> history = jdbcTemplate.query("""
+        select occurred_at, fps, zombie_count, entity_count, rss_mb
+        from t_server_metric
+        order by occurred_at desc
+        limit 120
+        """, (rs, rowNum) -> new ServerMetricPoint(
+        toDisplayTime(rs.getObject("occurred_at")),
+        rs.getBigDecimal("fps"),
+        integer(rs, "zombie_count"),
+        integer(rs, "entity_count"),
+        rs.getBigDecimal("rss_mb")));
+    return new ServerDetailView(current, players, history);
+  }
+
+  private BloodMoonStatus latestBloodMoon() {
+    List<BloodMoonStatus> rows = jdbcTemplate.query("""
+        select occurred_at, detail_text
+        from t_world_event_transaction
+        where event_type = 'BLOOD_MOON'
+        order by occurred_at desc
+        limit 1
+        """, (rs, rowNum) -> new BloodMoonStatus(
+        toDisplayTime(rs.getObject("occurred_at")), rs.getString("detail_text")));
+    return rows.isEmpty() ? new BloodMoonStatus("", "予定情報なし") : rows.getFirst();
   }
 
   private AiComment aiComment(
@@ -787,9 +821,8 @@ public class DashboardViewService {
       List<PlayerStatus> playerStatuses,
       List<TravelEntry> travelEntries,
       List<VehicleStatus> vehicleStatuses,
-      List<PoiStatus> poiStatuses,
-      List<KillLeader> killLeaders,
       ServerState serverState,
+      BloodMoonStatus bloodMoon,
       AiComment aiComment
   ) {
   }
@@ -855,17 +888,35 @@ public class DashboardViewService {
   ) {
   }
 
-  public record PoiStatus(
-      String poiName,
-      String category,
-      String playerName,
-      String coordinate,
-      String capturedAt,
-      long sleeperEvents
+  public record KillLeader(String playerName, long kills) {
+  }
+
+  public record KillEvent(String occurredAt, String playerName, String targetName, String coordinate) {
+  }
+
+  public record KillDetailView(List<KillLeader> leaders, List<KillEvent> recentKills) {
+  }
+
+  public record VehicleDetailView(List<VehicleStatus> vehicles) {
+  }
+
+  public record BloodMoonStatus(String occurredAt, String detailText) {
+  }
+
+  public record ServerMetricPoint(
+      String occurredAt,
+      BigDecimal fps,
+      Integer zombieCount,
+      Integer entityCount,
+      BigDecimal rssMb
   ) {
   }
 
-  public record KillLeader(String playerName, long kills) {
+  public record ServerDetailView(
+      ServerState current,
+      List<PlayerStatus> players,
+      List<ServerMetricPoint> history
+  ) {
   }
 
   public record ServerState(

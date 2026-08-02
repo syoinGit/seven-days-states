@@ -18,7 +18,7 @@ public class SevenDaysTelnetPlayerStateRunner {
 
   @Scheduled(
       initialDelayString = "${app.sevendays.telnet.initial-delay-ms:30000}",
-      fixedDelayString = "#{${app.sevendays.telnet.lp-interval-seconds:30} * 1000}")
+      fixedDelayString = "#{T(java.lang.Math).max(${app.sevendays.telnet.lp-interval-seconds:60}, 60) * 1000}")
   public void scheduledPlayerStateFetch() {
     if (!properties.telnet().scheduledEnabled()) {
       return;

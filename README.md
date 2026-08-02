@@ -1,8 +1,8 @@
-# seven-days-stats
+# WATCHPOINT
 
-7 Days to Die dedicated server logs and save data dashboard.
+7 Days to Die dedicated server logs and save data observation dashboard.
 
-The application imports server data from `players.xml`, Docker logs, and Telnet `lp` output, then displays a Japanese travel-diary style dashboard with player locations, recent events, POI names, kill counts, and server metrics.
+WATCHPOINT turns collected server logs into a mechanical, wasteland-themed activity feed designed to make the game more fun. It imports `players.xml`, Docker logs, and Telnet `lp` output, then connects player activity, combat, vehicles, locations, blood moon alerts, and server telemetry.
 
 ## Stack
 
@@ -17,10 +17,11 @@ The application imports server data from `players.xml`, Docker logs, and Telnet 
 
 - Imports 7 Days to Die save data such as `players.xml`, world POIs, game entities, and Japanese localization data.
 - Streams or imports Docker logs for JOIN, LEAVE, KILL, SLEEPER, XP, and server metric events.
-- Polls Telnet `lp` output to refresh current online player state.
+- Polls Telnet `lp` output once per minute to refresh the authoritative online player state.
 - Links vehicles to players from logged owner IDs or an unambiguous nearby fresh player position.
 - Tracks travel distance for each vehicle and player, including vehicle distance attributed to its owner.
-- Displays player cards, timeline entries, POI status, kill leaders, and server status.
+- Condenses the main activity feed to at most one player event per minute and moves blood moon alerts to the sidebar.
+- Provides dedicated player, server telemetry, combat, and vehicle pages.
 - Identifies players by stable external IDs, preferring EOS ID, then Steam ID.
 - Displays event timestamps in JST (`Asia/Tokyo`) as `yyyy-MM-dd HH:mm:ss`.
 

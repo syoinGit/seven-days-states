@@ -32,6 +32,10 @@ class DashboardViewServiceTests {
 
   @BeforeEach
   void resetData() {
+    jdbcTemplate.update("delete from t_server_metric");
+    jdbcTemplate.update("delete from t_player_join_transaction");
+    jdbcTemplate.update("delete from t_player_leave_transaction");
+    jdbcTemplate.update("delete from t_level_xp_summary_transaction");
     jdbcTemplate.update("delete from t_player_position_transaction");
     jdbcTemplate.update("delete from t_player_current_state");
     jdbcTemplate.update("delete from t_player_state_snapshot");
@@ -42,6 +46,88 @@ class DashboardViewServiceTests {
     jdbcTemplate.update("delete from t_world_event_transaction");
     jdbcTemplate.update("delete from m_japanese_translation");
     jdbcTemplate.update("delete from m_player");
+  }
+
+  @Test
+  void dashboardOnlineCountUsesFreshPlayerStateInsteadOfServerMetricPlayerCount() {
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    jdbcTemplate.update("""
+        insert into m_player (id, player_key, platform, user_id, player_name, last_seen_at)
+        values (1, 'EOS:eos-a', 'EOS', 'eos-a', 'PlayerA', ?)
+        """, Timestamp.from(now.toInstant()));
+    jdbcTemplate.update("""
+        insert into t_player_current_state
+        (player_entity_id, player_id, player_name, position_x, position_y, position_z, online, last_updated)
+        values (101, 1, 'PlayerA', 0, 0, 0, false, ?)
+        """, now.minusSeconds(5));
+    jdbcTemplate.update("""
+        insert into t_server_metric
+        (occurred_at, fps, player_count, zombie_count, source_file, source_log_hash)
+        values (?, 20.0, 2, 27, 'log', 'metric-authoritative-count')
+        """, now);
+
+    DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
+
+    assertThat(dashboard.serverState().playerCount()).isZero();
+    assertThat(dashboard.serverState().zombieCount()).isEqualTo(27);
+  }
+
+  @Test
+  void bloodMoonMovesToSidebarAndIsExcludedFromTimeline() {
+    jdbcTemplate.update("""
+        insert into t_world_event_transaction
+        (occurred_at, event_type, detail_text, source_file, source_log_hash, raw_line)
+        values (timestamp with time zone '2026-08-02 01:00:00+00:00', 'BLOOD_MOON',
+                'Day 28 / 周期 7', 'log', 'blood-sidebar', 'raw')
+        """);
+
+    DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
+
+    assertThat(dashboard.bloodMoon().detailText()).isEqualTo("Day 28 / 周期 7");
+    assertThat(dashboard.travelEntries())
+        .extracting(DashboardViewService.TravelEntry::kind)
+        .doesNotContain("BLOOD_MOON");
+  }
+
+  @Test
+  void dashboardCondensesPlayerEventsToOnePerMinute() {
+    jdbcTemplate.update("""
+        insert into t_entity_kill_transaction
+        (occurred_at, player_name, player_entity_id, target_entity_type, target_entity_id, source_file, source_log_hash)
+        values (timestamp with time zone '2026-08-02 01:00:10+00:00', 'PlayerA', 1, 'zombieA', 11, 'log', 'kill-minute-1'),
+               (timestamp with time zone '2026-08-02 01:00:40+00:00', 'PlayerA', 1, 'zombieB', 12, 'log', 'kill-minute-2'),
+               (timestamp with time zone '2026-08-02 01:01:05+00:00', 'PlayerA', 1, 'zombieC', 13, 'log', 'kill-minute-3')
+        """);
+
+    DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
+
+    assertThat(dashboard.travelEntries())
+        .filteredOn(entry -> "PlayerA".equals(entry.actor()))
+        .hasSize(2);
+  }
+
+  @Test
+  void detailViewsExposeServerKillAndVehicleData() {
+    jdbcTemplate.update("""
+        insert into t_server_metric
+        (occurred_at, fps, zombie_count, entity_count, rss_mb, source_file, source_log_hash)
+        values (timestamp with time zone '2026-08-02 01:00:00+00:00', 19.5, 8, 20, 2048, 'log', 'metric-detail')
+        """);
+    jdbcTemplate.update("""
+        insert into t_entity_kill_transaction
+        (occurred_at, player_name, player_entity_id, target_entity_type, target_entity_id, source_file, source_log_hash)
+        values (timestamp with time zone '2026-08-02 01:00:00+00:00', 'PlayerA', 1, 'zombieA', 11, 'log', 'kill-detail')
+        """);
+    jdbcTemplate.update("""
+        insert into t_vehicle_current_state
+        (vehicle_entity_id, vehicle_type, vehicle_name, total_distance, active, last_updated, source_file, source_log_hash)
+        values (99, 'EntityMotorcycle', 'vehicleMotorcycle', 42.0, true,
+                timestamp with time zone '2026-08-02 01:00:00+00:00', 'log', 'vehicle-detail')
+        """);
+
+    assertThat(dashboardViewService.serverDetail().history()).hasSize(1);
+    assertThat(dashboardViewService.killDetail().recentKills()).hasSize(1);
+    assertThat(dashboardViewService.vehicleDetail().vehicles()).hasSize(1);
   }
 
   @Test

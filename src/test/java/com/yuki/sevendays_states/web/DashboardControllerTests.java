@@ -32,8 +32,25 @@ class DashboardControllerTests {
   }
 
   @Test
+  void detailRoutesReturnTheirViewsAndModels() {
+    ConcurrentModel serverModel = new ConcurrentModel();
+    ConcurrentModel killModel = new ConcurrentModel();
+    ConcurrentModel vehicleModel = new ConcurrentModel();
+
+    assertThat(controller.server(serverModel)).isEqualTo("server-detail");
+    assertThat(controller.kills(killModel)).isEqualTo("kill-detail");
+    assertThat(controller.vehicles(vehicleModel)).isEqualTo("vehicle-detail");
+    assertThat(serverModel).containsKey("server");
+    assertThat(killModel).containsKey("kills");
+    assertThat(vehicleModel).containsKey("vehicles");
+  }
+
+  @Test
   void dashboardTemplateDoesNotRenderSensitiveIdentifiers() throws Exception {
-    String template = Files.readString(Path.of("src/main/resources/templates/dashboard.html"));
+    String template = Files.readString(Path.of("src/main/resources/templates/dashboard.html"))
+        + Files.readString(Path.of("src/main/resources/templates/server-detail.html"))
+        + Files.readString(Path.of("src/main/resources/templates/kill-detail.html"))
+        + Files.readString(Path.of("src/main/resources/templates/vehicle-detail.html"));
 
     assertThat(template)
         .doesNotContain("Steam_")
