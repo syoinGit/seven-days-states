@@ -7,6 +7,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -51,6 +52,9 @@ public class T_PlayerPositionTransaction {
   @Column(name = "inference_method", length = 80)
   private String inferenceMethod;
 
+  @Column(name = "movement_distance", nullable = false)
+  private BigDecimal movementDistance = BigDecimal.ZERO;
+
   @Column(name = "source_event_hash", nullable = false, unique = true, length = 64)
   private String sourceEventHash;
 
@@ -64,6 +68,9 @@ public class T_PlayerPositionTransaction {
   void prePersist() {
     if (createdAt == null) {
       createdAt = OffsetDateTime.now();
+    }
+    if (movementDistance == null) {
+      movementDistance = BigDecimal.ZERO;
     }
   }
 }

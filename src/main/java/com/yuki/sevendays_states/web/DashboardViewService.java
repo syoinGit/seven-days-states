@@ -138,6 +138,16 @@ public class DashboardViewService {
                  c.deaths,
                  c.level,
                  c.ping,
+                 (
+                   select coalesce(sum(d.movement_distance), 0)
+                   from t_player_position_transaction d
+                   where d.player_id = p.id
+                 ) as travel_distance,
+                 (
+                   select coalesce(sum(v.movement_distance), 0)
+                   from t_vehicle_position_transaction v
+                   where v.owner_player_id = p.id
+                 ) as vehicle_distance,
                  case
                    when c.online = true and c.last_updated >= ? then true
                    else false
@@ -173,7 +183,8 @@ public class DashboardViewService {
               or (pp.player_id is null and pp.player_name = p.player_name)
         )
         select player_id, player_name, world_name, game_name, last_login, x, y, z,
-               health, deaths, level, ping, online, poi_name, poi_category
+               health, deaths, level, ping, travel_distance, vehicle_distance,
+               online, poi_name, poi_category
         from status_rows
         where card_rank = 1
         order by last_login desc nulls last, player_name
@@ -191,6 +202,8 @@ public class DashboardViewService {
         integer(rs, "deaths"),
         integer(rs, "level"),
         integer(rs, "ping"),
+        rs.getBigDecimal("travel_distance"),
+        rs.getBigDecimal("vehicle_distance"),
         booleanValue(rs, "online")), currentStateFreshAfter);
   }
 
@@ -271,6 +284,16 @@ public class DashboardViewService {
                c.deaths,
                c.level,
                c.ping,
+               (
+                 select coalesce(sum(d.movement_distance), 0)
+                 from t_player_position_transaction d
+                 where d.player_id = p.id
+               ) as travel_distance,
+               (
+                 select coalesce(sum(v.movement_distance), 0)
+                 from t_vehicle_position_transaction v
+                 where v.owner_player_id = p.id
+               ) as vehicle_distance,
                case
                  when c.online = true and c.last_updated >= ? then true
                  else false
@@ -311,6 +334,8 @@ public class DashboardViewService {
         integer(rs, "deaths"),
         integer(rs, "level"),
         integer(rs, "ping"),
+        rs.getBigDecimal("travel_distance"),
+        rs.getBigDecimal("vehicle_distance"),
         booleanValue(rs, "online")), playerId, playerId, playerId, currentStateFreshAfter);
     if (statuses.isEmpty()) {
       return Optional.empty();
@@ -504,6 +529,7 @@ public class DashboardViewService {
         select v.vehicle_entity_id,
                coalesce(v.vehicle_name, v.vehicle_type) as vehicle_name,
                p.player_name as owner_name,
+               v.owner_inference_method,
                v.position_x,
                v.position_y,
                v.position_z,
@@ -521,6 +547,7 @@ public class DashboardViewService {
         rs.getInt("vehicle_entity_id"),
         rs.getString("vehicle_name"),
         displayPlayer(rs.getString("owner_name")),
+        rs.getString("owner_inference_method"),
         coordinate(rs.getObject("position_x"), rs.getObject("position_y"), rs.getObject("position_z")),
         rs.getBigDecimal("total_distance"),
         booleanValue(rs, "active"),
@@ -783,6 +810,8 @@ public class DashboardViewService {
       Integer deaths,
       Integer level,
       Integer ping,
+      BigDecimal travelDistance,
+      BigDecimal vehicleDistance,
       Boolean online
   ) {
   }
@@ -818,6 +847,7 @@ public class DashboardViewService {
       Integer vehicleEntityId,
       String vehicleName,
       String ownerName,
+      String ownerInferenceMethod,
       String coordinate,
       BigDecimal totalDistance,
       Boolean active,

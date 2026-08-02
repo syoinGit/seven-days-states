@@ -18,6 +18,8 @@ The application imports server data from `players.xml`, Docker logs, and Telnet 
 - Imports 7 Days to Die save data such as `players.xml`, world POIs, game entities, and Japanese localization data.
 - Streams or imports Docker logs for JOIN, LEAVE, KILL, SLEEPER, XP, and server metric events.
 - Polls Telnet `lp` output to refresh current online player state.
+- Links vehicles to players from logged owner IDs or an unambiguous nearby fresh player position.
+- Tracks travel distance for each vehicle and player, including vehicle distance attributed to its owner.
 - Displays player cards, timeline entries, POI status, kill leaders, and server status.
 - Identifies players by stable external IDs, preferring EOS ID, then Steam ID.
 - Displays event timestamps in JST (`Asia/Tokyo`) as `yyyy-MM-dd HH:mm:ss`.

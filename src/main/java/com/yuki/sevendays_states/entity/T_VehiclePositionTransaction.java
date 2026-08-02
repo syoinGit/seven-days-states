@@ -46,6 +46,9 @@ public class T_VehiclePositionTransaction {
   @Column(name = "owner_cross_platform_id", columnDefinition = "TEXT")
   private String ownerCrossPlatformId;
 
+  @Column(name = "owner_inference_method", length = 80)
+  private String ownerInferenceMethod;
+
   @Column(name = "position_x")
   private Integer positionX;
 

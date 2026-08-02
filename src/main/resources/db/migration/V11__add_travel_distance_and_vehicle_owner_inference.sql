@@ -1,0 +1,11 @@
+ALTER TABLE T_PLAYER_POSITION_TRANSACTION
+    ADD COLUMN movement_distance NUMERIC NOT NULL DEFAULT 0;
+
+ALTER TABLE T_VEHICLE_CURRENT_STATE
+    ADD COLUMN owner_inference_method VARCHAR(80);
+
+ALTER TABLE T_VEHICLE_POSITION_TRANSACTION
+    ADD COLUMN owner_inference_method VARCHAR(80);
+
+CREATE INDEX idx_t_vehicle_position_owner_occurred_at
+    ON T_VEHICLE_POSITION_TRANSACTION (owner_player_id, occurred_at);

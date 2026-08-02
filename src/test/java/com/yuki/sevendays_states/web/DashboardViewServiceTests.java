@@ -253,8 +253,10 @@ class DashboardViewServiceTests {
     jdbcTemplate.update("""
         insert into t_vehicle_current_state
         (vehicle_entity_id, vehicle_type, vehicle_name, owner_player_id, owner_cross_platform_id,
-         position_x, position_y, position_z, total_distance, active, last_updated, source_file, source_log_hash)
-        values (2631, 'EntityBicycle', 'vehicleBicycle', 1, 'EOS_eos-a', 452, 38, -605, 20.0, true,
+         owner_inference_method, position_x, position_y, position_z, total_distance, active,
+         last_updated, source_file, source_log_hash)
+        values (2631, 'EntityBicycle', 'vehicleBicycle', 1, 'EOS_eos-a', 'nearest_fresh_player_position',
+                452, 38, -605, 20.0, true,
                 timestamp with time zone '2026-07-29 05:58:16+00:00', 'log', 'vehicle-current')
         """);
     jdbcTemplate.update("""
@@ -262,7 +264,14 @@ class DashboardViewServiceTests {
         (occurred_at, event_type, vehicle_entity_id, vehicle_type, vehicle_name, owner_player_id,
          position_x, position_y, position_z, movement_distance, source_file, source_log_hash, raw_line)
         values (timestamp with time zone '2026-07-29 05:56:11+00:00', 'VEHICLE_LOADED', 2631, 'EntityBicycle',
-                'vehicleBicycle', 1, 442, 38, -615, 0, 'log', 'vehicle-loaded', 'raw')
+                'vehicleBicycle', 1, 442, 38, -615, 20.0, 'log', 'vehicle-loaded', 'raw')
+        """);
+    jdbcTemplate.update("""
+        insert into t_player_position_transaction
+        (occurred_at, player_name, player_entity_id, player_id, position_x, position_y, position_z,
+         position_source_type, inference_method, movement_distance, source_event_hash, source_file)
+        values (timestamp with time zone '2026-07-29 05:58:10+00:00', 'PlayerA', 171, 1, 450, 38, -605,
+                'LP_COMMAND', 'direct_telnet_lp', 12.5, 'player-position', 'telnet:lp')
         """);
 
     DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
@@ -272,6 +281,11 @@ class DashboardViewServiceTests {
         .contains("AIR_DROP", "VEHICLE_LOADED");
     assertThat(dashboard.vehicleStatuses()).hasSize(1);
     assertThat(dashboard.vehicleStatuses().getFirst().ownerName()).isEqualTo("PlayerA");
+    assertThat(dashboard.vehicleStatuses().getFirst().ownerInferenceMethod())
+        .isEqualTo("nearest_fresh_player_position");
     assertThat(dashboard.vehicleStatuses().getFirst().totalDistance()).isEqualByComparingTo("20.0");
+    assertThat(dashboard.playerStatuses()).hasSize(1);
+    assertThat(dashboard.playerStatuses().getFirst().travelDistance()).isEqualByComparingTo("12.5");
+    assertThat(dashboard.playerStatuses().getFirst().vehicleDistance()).isEqualByComparingTo("20.0");
   }
 }
