@@ -28,7 +28,7 @@ public record SevenDaysDataProperties(
     dataDir = blankToNull(dataDir);
     gameDir = blankToNull(gameDir);
     importSettings = importSettings == null ? new Import(true, false, 600000L) : importSettings;
-    log = log == null ? new Log(null, false, 600000L, 600000L, 60L) : log;
+    log = log == null ? new Log(null, false, 600000L, 600000L, 1L) : log;
     docker = docker == null ? new Docker("7dtd", "5m", true, 5000L, 5L) : docker;
     telnet = telnet == null ? new Telnet("localhost", 8081, "", false, 30000L, 5000) : telnet;
     transaction = transaction == null ? new Transaction(120L) : transaction;
@@ -94,7 +94,7 @@ public record SevenDaysDataProperties(
       dir = blankToNull(dir);
       fixedDelayMs = fixedDelayMs <= 0 ? 600000L : fixedDelayMs;
       initialDelayMs = initialDelayMs < 0 ? 600000L : initialDelayMs;
-      serverMetricIntervalMinutes = serverMetricIntervalMinutes <= 0 ? 60L : serverMetricIntervalMinutes;
+      serverMetricIntervalMinutes = serverMetricIntervalMinutes <= 0 ? 1L : serverMetricIntervalMinutes;
     }
   }
 

@@ -4,26 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="refresh" content="60">
-  <title th:text="${player.status.playerName + ' | 7 Days 旅日記'}">7 Days 旅日記</title>
+  <title th:text="${player.status.playerName + ' | WATCHPOINT'}">WATCHPOINT</title>
   <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
 <header class="topbar">
-  <div>
-    <p class="eyebrow">Player Detail</p>
-    <h1 th:text="${player.status.playerName}">player</h1>
-    <p>
-      <span th:text="${player.status.online == false ? 'オフライン' : 'オンライン'}">オンライン</span>
-      <span> / </span>
-      <span th:text="${player.status.poiName}">荒野のどこか</span>
-    </p>
-  </div>
-  <div class="server-strip">
-    <a class="nav-button" th:href="@{/}">TOP</a>
-  </div>
+  <a class="brand" th:href="@{/}"><span class="brand-mark">WP</span><span><b>WATCHPOINT</b><small>PLAYER DOSSIER</small></span></a>
+  <a class="nav-button" th:href="@{/}">観測ログへ戻る</a>
 </header>
 
-<main class="layout">
+<main class="layout detail-page">
+  <header class="page-title">
+    <p class="eyebrow">PLAYER / PERSONAL RECORD</p>
+    <h1 th:text="${player.status.playerName}">player</h1>
+    <p><span th:text="${player.status.online == false ? 'オフライン' : 'オンライン'}">オンライン</span> / <span th:text="${player.status.poiName}">荒野のどこか</span></p>
+  </header>
   <section class="players-now detail-summary">
     <article class="player-card">
       <div class="player-main">

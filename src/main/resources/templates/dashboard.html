@@ -4,195 +4,101 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="refresh" content="60">
-  <title>7 Days 旅日記</title>
+  <title>WATCHPOINT</title>
   <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
 <header class="topbar">
-  <div>
-    <p class="eyebrow">7 Days to Die Server</p>
-    <h1>旅日記</h1>
-    <p>いま誰が、どこで、何をしているか</p>
-  </div>
-  <div class="server-strip">
-    <span>FPS <strong th:text="${dashboard.serverState.fps ?: '-'}">-</strong></span>
-    <span>人数 <strong th:text="${dashboard.serverState.playerCount ?: '-'}">-</strong></span>
-    <span>ゾンビ <strong th:text="${dashboard.serverState.zombieCount ?: '-'}">-</strong></span>
+  <a class="brand" th:href="@{/}">
+    <span class="brand-mark">WP</span>
+    <span><b>WATCHPOINT</b><small>WASTELAND OBSERVATION NETWORK</small></span>
+  </a>
+  <div class="top-status">
+    <span class="live-pulse"></span>
+    <b th:text="${dashboard.serverState.playerCount + ' ONLINE'}">0 ONLINE</b>
   </div>
 </header>
 
-<main class="layout">
-  <section class="ai-comment" aria-label="ai-comment">
-    <div>
-      <p th:text="${dashboard.aiComment.title}">AI観測コメント</p>
-      <strong th:text="${dashboard.aiComment.body}">荒野は今日も平常運転です。</strong>
-    </div>
-  </section>
+<main class="app-shell">
+  <nav class="rail" aria-label="main navigation">
+    <p class="rail-label">CONTROL</p>
+    <a class="active" th:href="@{/}"><span>01</span>観測ログ</a>
+    <a th:href="@{/server}"><span>02</span>サーバー</a>
+    <a th:href="@{/kills}"><span>03</span>討伐記録</a>
+    <a th:href="@{/vehicles}"><span>04</span>乗り物</a>
+    <p class="rail-copy">収集したログで、<br>この世界をさらに楽しむ。</p>
+  </nav>
 
-  <section class="players-now" aria-label="players">
-    <article class="player-card" th:if="${#lists.isEmpty(dashboard.playerStatuses)}">
+  <section class="feed-column">
+    <header class="feed-header">
       <div>
-        <h2>まだ誰も旅に出ていません</h2>
-        <p>ログとセーブデータが入ると、ここに現在地が表示されます。</p>
+        <p class="eyebrow">LIVE OBSERVATION</p>
+        <h1>荒野で起きていること</h1>
       </div>
-    </article>
-    <article class="player-card" th:each="player : ${dashboard.playerStatuses}">
-      <div class="player-main">
-        <span class="status-dot" th:classappend="${player.online == false} ? ' offline'"></span>
-        <div>
-          <h2>
-            <a th:href="@{/players/{playerId}(playerId=${player.playerId})}"
-               th:text="${player.playerName}">player</a>
-          </h2>
-          <p>
-            <strong th:text="${player.poiName}">荒野のどこか</strong>
-            <span th:text="${player.online == false ? 'オフライン' : 'オンライン'}">オンライン</span>
-          </p>
-        </div>
-      </div>
-      <dl>
-        <div>
-          <dt>ワールド</dt>
-          <dd th:text="${player.worldName ?: '-'}">world</dd>
-        </div>
-        <div>
-          <dt>座標</dt>
-          <dd th:text="${player.coordinate ?: '-'}">-</dd>
-        </div>
-        <div>
-          <dt>更新</dt>
-          <dd th:text="${player.lastLogin ?: '-'}">-</dd>
-        </div>
-        <div>
-          <dt>HP</dt>
-          <dd th:text="${player.health ?: '-'}">-</dd>
-        </div>
-        <div>
-          <dt>レベル</dt>
-          <dd th:text="${player.level ?: '-'}">-</dd>
-        </div>
-        <div>
-          <dt>死亡 / Ping</dt>
-          <dd>
-            <span th:text="${player.deaths ?: '-'}">-</span>
-            <span> / </span>
-            <span th:text="${player.ping ?: '-'}">-</span>
-          </dd>
-        </div>
-        <div>
-          <dt>移動距離</dt>
-          <dd>
-            <span th:text="${#numbers.formatDecimal(player.travelDistance ?: 0, 1, 1)}">0.0</span>
-            <span>m</span>
-          </dd>
-        </div>
-        <div>
-          <dt>乗り物移動</dt>
-          <dd>
-            <span th:text="${#numbers.formatDecimal(player.vehicleDistance ?: 0, 1, 1)}">0.0</span>
-            <span>m</span>
-          </dd>
-        </div>
-      </dl>
-    </article>
-  </section>
+      <span>60 SEC / PLAYER</span>
+    </header>
 
-  <section class="main-grid">
-    <article class="panel timeline-panel">
-      <div class="panel-head">
-        <h2>いま起きていること</h2>
+    <section class="ai-comment" aria-label="ai-comment">
+      <span class="ai-index">COM-01</span>
+      <div>
+        <p th:text="${dashboard.aiComment.title}">AI観測コメント</p>
+        <strong th:text="${dashboard.aiComment.body}">荒野は今日も平常運転です。</strong>
       </div>
-      <ol class="timeline">
-        <li th:if="${#lists.isEmpty(dashboard.travelEntries)}" class="empty">
-          まだイベントログがありません。
-        </li>
-        <li th:each="entry : ${dashboard.travelEntries}">
-          <time th:text="${entry.occurredAt ?: '-'}">time</time>
-          <div>
+    </section>
+
+    <ol class="feed">
+      <li th:if="${#lists.isEmpty(dashboard.travelEntries)}" class="empty">まだ観測ログがありません。</li>
+      <li class="feed-item" th:each="entry : ${dashboard.travelEntries}">
+        <div class="feed-avatar" th:text="${#strings.substring(entry.actor, 0, 1)}">W</div>
+        <div class="feed-body">
+          <header>
+            <strong th:text="${entry.actor}">observer</strong>
             <span class="tag" th:text="${entry.kind}">EVENT</span>
-            <p th:text="${entry.message}">
-              誰かが荒野のどこかで何かした
-            </p>
-            <small th:if="${!#strings.isEmpty(entry.coordinate)}"
-                   th:text="${'（' + entry.coordinate + '）'}">position</small>
-          </div>
-        </li>
-      </ol>
-    </article>
-
-    <aside class="side-stack">
-      <article class="panel">
-        <div class="panel-head">
-          <h2>乗り物</h2>
+            <time th:text="${entry.occurredAt ?: '-'}">time</time>
+          </header>
+          <p th:text="${entry.message}">荒野で何かが起きた</p>
+          <footer th:if="${!#strings.isEmpty(entry.coordinate)}">
+            <span>LOC</span><b th:text="${entry.coordinate}">0, 0, 0</b>
+          </footer>
         </div>
-        <div class="poi-list">
-          <div th:if="${#lists.isEmpty(dashboard.vehicleStatuses)}" class="empty">まだ乗り物ログがありません。</div>
-          <div class="poi-row vehicle-row" th:each="vehicle : ${dashboard.vehicleStatuses}">
-            <div>
-              <strong th:text="${vehicle.vehicleName + ' #' + vehicle.vehicleEntityId}">vehicle</strong>
-              <span th:text="${vehicle.active == false ? '消失' : '追跡中'}">追跡中</span>
-              <p>
-                <b th:text="${vehicle.ownerName}">owner</b>
-                <span>の乗り物</span>
-                <small th:if="${vehicle.ownerInferenceMethod == 'nearest_fresh_player_position'}">（位置から推定）</small>
-              </p>
-            </div>
-            <small>
-              <span th:text="${vehicle.coordinate ?: '-'}">position</span>
-              <span th:if="${vehicle.totalDistance != null}">
-                <br>
-                <span th:text="${#numbers.formatDecimal(vehicle.totalDistance, 1, 1)}">0.0</span>
-                <span>m</span>
-              </span>
-            </small>
-          </div>
-        </div>
-      </article>
-
-      <article class="panel">
-        <div class="panel-head">
-          <h2>探索中の場所</h2>
-        </div>
-        <div class="poi-list">
-          <div th:if="${#lists.isEmpty(dashboard.poiStatuses)}" class="empty">まだ現在地がありません。</div>
-          <div class="poi-row" th:each="poi : ${dashboard.poiStatuses}">
-            <div>
-              <strong th:text="${poi.poiName}">poi</strong>
-              <span th:if="${poi.category}" th:text="${poi.category}">category</span>
-              <p>
-                <b th:text="${poi.playerName}">player</b>
-                <span>が探索中</span>
-              </p>
-            </div>
-            <small th:text="${poi.coordinate ?: '-'}">position</small>
-          </div>
-        </div>
-      </article>
-
-      <article class="panel">
-        <div class="panel-head">
-          <h2>討伐メモ</h2>
-        </div>
-        <table>
-          <thead>
-          <tr>
-            <th>プレイヤー</th>
-            <th class="num">討伐数</th>
-          </tr>
-          </thead>
-          <tbody>
-          <tr th:if="${#lists.isEmpty(dashboard.killLeaders)}">
-            <td colspan="2" class="empty">まだ討伐ログがありません。</td>
-          </tr>
-          <tr th:each="row : ${dashboard.killLeaders}">
-            <td th:text="${row.playerName}">player</td>
-            <td class="num" th:text="${#numbers.formatInteger(row.kills, 1, 'COMMA')}">0</td>
-          </tr>
-          </tbody>
-        </table>
-      </article>
-    </aside>
+      </li>
+    </ol>
   </section>
+
+  <aside class="status-sidebar">
+    <section class="side-module blood-alert">
+      <p class="module-code">ALERT / BLOOD MOON</p>
+      <h2>次回襲撃警戒</h2>
+      <strong th:text="${dashboard.bloodMoon.detailText}">予定情報なし</strong>
+      <small th:text="${dashboard.bloodMoon.occurredAt ?: '未観測'}">未観測</small>
+    </section>
+
+    <section class="side-module">
+      <div class="module-head">
+        <div><p class="module-code">PILOT STATUS</p><h2>プレイヤー</h2></div>
+        <b th:text="${dashboard.serverState.playerCount}">0</b>
+      </div>
+      <div class="pilot-list">
+        <a class="pilot" th:each="player : ${dashboard.playerStatuses}"
+           th:href="@{/players/{id}(id=${player.playerId})}">
+          <span class="status-dot" th:classappend="${player.online == false} ? ' offline'"></span>
+          <span class="pilot-info">
+            <strong th:text="${player.playerName}">player</strong>
+            <small th:text="${player.online == false ? 'OFFLINE' : player.poiName}">OFFLINE</small>
+          </span>
+          <b th:text="${player.level != null ? 'LV.' + player.level : '--'}">--</b>
+        </a>
+        <p th:if="${#lists.isEmpty(dashboard.playerStatuses)}" class="empty">未観測</p>
+      </div>
+    </section>
+
+    <a class="side-module server-summary" th:href="@{/server}">
+      <p class="module-code">SYSTEM VITALS</p>
+      <div><span>FPS</span><b th:text="${dashboard.serverState.fps ?: '-'}">-</b></div>
+      <div><span>LAST SIGNAL</span><b th:text="${dashboard.serverState.occurredAt ?: '-'}">-</b></div>
+      <small>詳細ステータスを見る →</small>
+    </a>
+  </aside>
 </main>
 </body>
 </html>

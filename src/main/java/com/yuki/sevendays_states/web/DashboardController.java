@@ -27,4 +27,22 @@ public class DashboardController {
     model.addAttribute("player", player);
     return "player-detail";
   }
+
+  @GetMapping("/server")
+  public String server(Model model) {
+    model.addAttribute("server", dashboardViewService.serverDetail());
+    return "server-detail";
+  }
+
+  @GetMapping("/kills")
+  public String kills(Model model) {
+    model.addAttribute("kills", dashboardViewService.killDetail());
+    return "kill-detail";
+  }
+
+  @GetMapping("/vehicles")
+  public String vehicles(Model model) {
+    model.addAttribute("vehicles", dashboardViewService.vehicleDetail());
+    return "vehicle-detail";
+  }
 }
