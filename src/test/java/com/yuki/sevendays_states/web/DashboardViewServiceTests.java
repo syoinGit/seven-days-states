@@ -347,6 +347,8 @@ class DashboardViewServiceTests {
     assertThat(detail.defeatedEnemies().getFirst().defeatedCount()).isEqualTo(2);
     assertThat(detail.dailyKills()).isNotEmpty();
     assertThat(detail.growthTrends().getFirst().totalXp()).isEqualTo(100);
+    assertThat(detail.growthTrends().getFirst().playerName()).isEqualTo("PlayerA");
+    assertThat(detail.growthTrends().getFirst().chartPoints()).isNotBlank();
   }
 
   @Test

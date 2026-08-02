@@ -840,24 +840,73 @@ public class DashboardViewService {
   }
 
   private List<GrowthTrend> growthTrends() {
-    return jdbcTemplate.query("""
+    List<GrowthReport> reports = jdbcTemplate.query("""
         select coalesce(player_name, '誰か') as player_name,
-               sum(xp_total) as total_xp,
-               sum(xp_from_kill) as kill_xp,
-               sum(xp_from_loot) as loot_xp,
-               sum(xp_from_harvesting) as harvest_xp,
-               count(*) as reports
+               occurred_at, xp_total, xp_from_kill, xp_from_loot, xp_from_harvesting
         from t_level_xp_summary_transaction
-        group by coalesce(player_name, '誰か')
-        order by total_xp desc, player_name
-        limit 8
-        """, (rs, rowNum) -> new GrowthTrend(
+        order by occurred_at, level_xp_summary_transaction_id
+        """, (rs, rowNum) -> new GrowthReport(
         rs.getString("player_name"),
-        rs.getLong("total_xp"),
-        rs.getLong("kill_xp"),
-        rs.getLong("loot_xp"),
-        rs.getLong("harvest_xp"),
-        rs.getLong("reports")));
+        rs.getObject("occurred_at", OffsetDateTime.class),
+        rs.getLong("xp_total"),
+        rs.getLong("xp_from_kill"),
+        rs.getLong("xp_from_loot"),
+        rs.getLong("xp_from_harvesting")));
+    Map<String, GrowthAccumulator> players = new LinkedHashMap<>();
+    reports.forEach(report -> players.computeIfAbsent(
+        report.playerName(), ignored -> new GrowthAccumulator()).add(report));
+    return players.entrySet().stream()
+        .map(entry -> entry.getValue().toTrend(entry.getKey()))
+        .sorted(Comparator.comparingLong(GrowthTrend::totalXp).reversed()
+            .thenComparing(GrowthTrend::playerName))
+        .limit(8)
+        .toList();
+  }
+
+  private String growthChartPoints(List<GrowthPoint> points, long maxXp) {
+    if (points.isEmpty()) {
+      return "";
+    }
+    int lastIndex = Math.max(1, points.size() - 1);
+    return java.util.stream.IntStream.range(0, points.size())
+        .mapToObj(index -> {
+          double x = index * 300.0 / lastIndex;
+          double y = 76.0 - (points.get(index).cumulativeXp() * 68.0 / Math.max(1, maxXp));
+          return String.format(java.util.Locale.ROOT, "%.1f,%.1f", x, y);
+        })
+        .collect(java.util.stream.Collectors.joining(" "));
+  }
+
+  private final class GrowthAccumulator {
+    private long total;
+    private long kills;
+    private long loot;
+    private long harvest;
+    private final List<GrowthPoint> points = new ArrayList<>();
+
+    private void add(GrowthReport report) {
+      total += report.totalXp();
+      kills += report.killXp();
+      loot += report.lootXp();
+      harvest += report.harvestXp();
+      points.add(new GrowthPoint(
+          report.occurredAt().atZoneSameInstant(DisplayTimeFormatter.JST).toLocalDate().toString(),
+          total));
+    }
+
+    private GrowthTrend toTrend(String playerName) {
+      List<GrowthPoint> visiblePoints = points.size() <= 24
+          ? List.copyOf(points)
+          : java.util.stream.IntStream.range(0, 24)
+              .map(index -> index * (points.size() - 1) / 23)
+              .mapToObj(points::get)
+              .toList();
+      return new GrowthTrend(
+          playerName, total, kills, loot, harvest, points.size(),
+          growthChartPoints(visiblePoints, total),
+          visiblePoints.isEmpty() ? "" : visiblePoints.getFirst().date(),
+          visiblePoints.isEmpty() ? "" : visiblePoints.getLast().date());
+    }
   }
 
   private List<AdventureRanking> adventureRankings() {
@@ -1279,7 +1328,16 @@ public class DashboardViewService {
   }
 
   public record GrowthTrend(
-      String playerName, long totalXp, long killXp, long lootXp, long harvestXp, long reports) {
+      String playerName, long totalXp, long killXp, long lootXp, long harvestXp, long reports,
+      String chartPoints, String firstDate, String lastDate) {
+  }
+
+  private record GrowthReport(
+      String playerName, OffsetDateTime occurredAt, long totalXp,
+      long killXp, long lootXp, long harvestXp) {
+  }
+
+  private record GrowthPoint(String date, long cumulativeXp) {
   }
 
   public record AdventureRanking(
