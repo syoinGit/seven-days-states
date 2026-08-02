@@ -840,6 +840,8 @@ public class DashboardViewService {
     return jdbcTemplate.query("""
         select player_name, count(*) as kills
         from t_entity_kill_transaction
+        where lower(player_name) not like 'zombie%'
+          and lower(player_name) not like 'animal%'
         group by player_name
         order by kills desc, player_name
         limit 8
@@ -856,6 +858,8 @@ public class DashboardViewService {
                         k.target_entity_type) as target_name,
                k.player_position_x, k.player_position_y, k.player_position_z
         from t_entity_kill_transaction k
+        where lower(k.player_name) not like 'zombie%'
+          and lower(k.player_name) not like 'animal%'
         order by k.occurred_at desc
         limit 100
         """, (rs, rowNum) -> new KillEvent(
@@ -885,6 +889,8 @@ public class DashboardViewService {
                count(distinct k.player_name) as hunter_count,
                max(k.occurred_at) as last_defeated_at
         from t_entity_kill_transaction k
+        where lower(k.player_name) not like 'zombie%'
+          and lower(k.player_name) not like 'animal%'
         group by k.target_entity_type
         order by defeated_count desc, target_name
         limit 12
@@ -1131,6 +1137,8 @@ public class DashboardViewService {
         select cast(occurred_at as date) as activity_day, count(*) as event_count
         from t_entity_kill_transaction
         where occurred_at >= ?
+          and lower(player_name) not like 'zombie%'
+          and lower(player_name) not like 'animal%'
         group by cast(occurred_at as date)
         order by activity_day
         """, (rs, rowNum) -> new DailyActivityCount(

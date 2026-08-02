@@ -4,7 +4,7 @@
 <body>
 <header class="topbar"><a class="brand" th:href="@{/}"><span class="brand-mark">WP</span><span><b>WATCHPOINT</b><small>SERVER VITALS</small></span></a><a class="nav-button" th:href="@{/}">冒険タイムラインへ戻る</a></header>
 <main class="detail-shell"><nav th:replace="~{fragments/navigation :: rail('server')}"></nav><section class="layout detail-page">
-  <header class="page-title"><nav class="breadcrumbs"><a th:href="@{/}"><span aria-hidden="true">⌂</span> 冒険記録</a><span>›</span><b><span aria-hidden="true">⌁</span> サーバー情報</b></nav><p class="eyebrow">SYSTEM / TELEMETRY</p><h1>サーバーステータス</h1><p>ゲームサーバーから受信した稼働情報。人数は最新のTelnet観測を正とします。</p></header>
+  <header class="page-title"><nav class="breadcrumbs"><a th:href="@{/}"><span aria-hidden="true">⌂</span> 冒険記録</a><span>›</span><b><span aria-hidden="true">⌁</span> サーバー情報</b></nav><p class="eyebrow">SYSTEM / TELEMETRY</p><h1>サーバーステータス</h1><p>荒野の闇を見張る観測所から、まだ消えていない生存信号を送ります。途絶えたときは、その先に何かがいるのかもしれません。</p></header>
   <section class="metric-grid">
     <article class="metric-card"><span>ONLINE PILOTS</span><strong th:text="${server.current.playerCount ?: 0}">0</strong><small>最新のプレイヤー状態</small></article>
     <article class="metric-card"><span>FRAME RATE</span><strong th:text="${server.current.fps ?: '-'}">-</strong><small>FPS</small></article>

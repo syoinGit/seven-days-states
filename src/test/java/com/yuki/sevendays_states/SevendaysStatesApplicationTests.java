@@ -1,5 +1,6 @@
 package com.yuki.sevendays_states;
 
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,6 +19,9 @@ class SevendaysStatesApplicationTests {
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  private Flyway flyway;
 
   @Test
   void contextLoads() {
@@ -43,6 +47,19 @@ class SevendaysStatesApplicationTests {
     assertThat(tableExists("M_SOURCE_FILE")).isFalse();
     assertThat(tableExists("M_SERVER_COMMAND_PERMISSION")).isFalse();
     assertThat(tableExists("T_SAVE_FILE_SNAPSHOT")).isFalse();
+  }
+
+  @Test
+  void repairsKnownProductionV15ChecksumBeforeValidation() {
+    jdbcTemplate.update(
+        "update \"flyway_schema_history\" set \"checksum\" = ? where \"version\" = '15'",
+        -1037278684);
+
+    assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
+    assertThat(jdbcTemplate.queryForObject(
+        "select \"checksum\" from \"flyway_schema_history\" where \"version\" = '15'",
+        Integer.class))
+        .isEqualTo(-853613223);
   }
 
   private boolean tableExists(String tableName) {

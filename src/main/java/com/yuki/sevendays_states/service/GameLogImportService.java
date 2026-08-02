@@ -329,6 +329,9 @@ public class GameLogImportService {
   }
 
   private void saveEntityKill(String sourceFile, EntityKillLogEvent event, Counter counter) {
+    if (isHostileEntityName(event.playerName())) {
+      return;
+    }
     String hash = lineHash(sourceFile, event.occurredAt().toString(), event.rawLine());
     if (entityKillRepository.existsBySourceLogHash(hash)) {
       return;
@@ -351,6 +354,14 @@ public class GameLogImportService {
     row.setSourceLogHash(hash);
     entityKillRepository.save(row);
     counter.entityKills++;
+  }
+
+  private boolean isHostileEntityName(String name) {
+    if (name == null) {
+      return true;
+    }
+    String normalized = name.toLowerCase(java.util.Locale.ROOT);
+    return normalized.startsWith("zombie") || normalized.startsWith("animal");
   }
 
   private void saveLevelXpSummary(
