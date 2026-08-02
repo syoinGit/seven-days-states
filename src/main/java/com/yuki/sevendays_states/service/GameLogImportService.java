@@ -82,6 +82,12 @@ public class GameLogImportService {
 
   private static final int MAX_PLAYER_POSITION_INFERENCE_DISTANCE = 250;
   private static final int MIN_PLAYER_POSITION_INFERENCE_DISTANCE_ADVANTAGE = 50;
+  private static final int MAX_VEHICLE_OWNER_DISTANCE = 8;
+  private static final int MAX_VEHICLE_OWNER_VERTICAL_DISTANCE = 5;
+  private static final int MIN_VEHICLE_OWNER_DISTANCE_ADVANTAGE = 3;
+  private static final Duration MAX_VEHICLE_OWNER_POSITION_AGE = Duration.ofSeconds(30);
+  private static final Duration MAX_PLAYER_MOVEMENT_GAP = Duration.ofMinutes(2);
+  private static final int VEHICLE_ENTITY_REUSE_DISTANCE = 50;
 
   private final SevenDaysDataProperties properties;
   private final M_PlayerRepository playerRepository;
@@ -726,6 +732,8 @@ public class GameLogImportService {
     row.setPositionZ(positionZ);
     row.setPositionSourceType(positionSourceType);
     row.setInferenceMethod(inferenceMethod);
+    row.setMovementDistance(playerMovementDistance(
+        playerId, playerEntityId, occurredAt, positionX, positionZ, positionSourceType));
     row.setSourceEventHash(sourceEventHash);
     row.setSourceFile(sourceFile);
     playerPositionRepository.save(row);
@@ -808,8 +816,17 @@ public class GameLogImportService {
     }
     T_VehicleCurrentState currentState = vehicleCurrentStateRepository.findById(event.vehicleEntityId())
         .orElseGet(T_VehicleCurrentState::new);
-    VehicleOwner owner = resolveVehicleOwner(event, currentState);
-    BigDecimal movementDistance = vehicleMovementDistance(currentState, event);
+    boolean reusedVehicleEntity = isReusedVehicleEntity(currentState, event);
+    if (reusedVehicleEntity) {
+      currentState.setOwnerPlayerId(null);
+      currentState.setOwnerCrossPlatformId(null);
+      currentState.setOwnerInferenceMethod(null);
+      currentState.setTotalDistance(BigDecimal.ZERO);
+    }
+    BigDecimal movementDistance = reusedVehicleEntity
+        ? BigDecimal.ZERO
+        : vehicleMovementDistance(currentState, event);
+    VehicleOwner owner = resolveVehicleOwner(event, currentState, movementDistance);
 
     T_VehiclePositionTransaction history = new T_VehiclePositionTransaction();
     history.setOccurredAt(event.occurredAt());
@@ -819,6 +836,7 @@ public class GameLogImportService {
     history.setVehicleName(event.vehicleName());
     history.setOwnerPlayerId(owner.playerId());
     history.setOwnerCrossPlatformId(owner.crossPlatformId());
+    history.setOwnerInferenceMethod(owner.inferenceMethod());
     history.setPositionX(event.positionX());
     history.setPositionY(event.positionY());
     history.setPositionZ(event.positionZ());
@@ -834,6 +852,7 @@ public class GameLogImportService {
     currentState.setVehicleName(event.vehicleName());
     currentState.setOwnerPlayerId(owner.playerId());
     currentState.setOwnerCrossPlatformId(owner.crossPlatformId());
+    currentState.setOwnerInferenceMethod(owner.inferenceMethod());
     if (event.positionX() != null && event.positionZ() != null) {
       currentState.setPositionX(event.positionX());
       currentState.setPositionY(event.positionY());
@@ -852,21 +871,82 @@ public class GameLogImportService {
     counter.vehicleEvents++;
   }
 
-  private VehicleOwner resolveVehicleOwner(VehicleLogEvent event, T_VehicleCurrentState currentState) {
+  private VehicleOwner resolveVehicleOwner(
+      VehicleLogEvent event,
+      T_VehicleCurrentState currentState,
+      BigDecimal movementDistance) {
     String ownerCrossPlatformId = event.ownerCrossPlatformId() == null
         ? currentState.getOwnerCrossPlatformId()
         : event.ownerCrossPlatformId();
     Long ownerPlayerId = currentState.getOwnerPlayerId();
+    String inferenceMethod = currentState.getOwnerInferenceMethod();
     if (event.ownerCrossPlatformId() != null) {
       ownerPlayerId = findPlayerByCrossPlatformId(event.ownerCrossPlatformId())
           .map(M_Player::getId)
           .orElse(ownerPlayerId);
+      inferenceMethod = "vehicle_log_owner";
     } else if (ownerCrossPlatformId != null && ownerPlayerId == null) {
       ownerPlayerId = findPlayerByCrossPlatformId(ownerCrossPlatformId)
           .map(M_Player::getId)
           .orElse(null);
     }
-    return new VehicleOwner(ownerPlayerId, ownerCrossPlatformId);
+    if (ownerPlayerId == null
+        && event.positionX() != null
+        && event.positionZ() != null
+        && ("VEHICLE_POST_INIT".equals(event.eventType())
+            || movementDistance.compareTo(BigDecimal.ONE) >= 0)) {
+      Optional<T_PlayerCurrentState> inferred = inferVehicleOwnerByPosition(event);
+      if (inferred.isPresent()) {
+        T_PlayerCurrentState player = inferred.get();
+        ownerPlayerId = player.getPlayerId();
+        ownerCrossPlatformId = player.getCrossPlatformId();
+        inferenceMethod = "nearest_fresh_player_position";
+      }
+    }
+    return new VehicleOwner(ownerPlayerId, ownerCrossPlatformId, inferenceMethod);
+  }
+
+  private Optional<T_PlayerCurrentState> inferVehicleOwnerByPosition(VehicleLogEvent event) {
+    List<VehicleOwnerCandidate> candidates = playerCurrentStateRepository.findByOnlineTrue().stream()
+        .filter(player -> player.getPlayerId() != null)
+        .filter(player -> player.getPositionX() != null && player.getPositionZ() != null)
+        .filter(player -> event.positionY() == null || player.getPositionY() == null
+            || Math.abs(player.getPositionY() - event.positionY()) <= MAX_VEHICLE_OWNER_VERTICAL_DISTANCE)
+        .filter(player -> isFreshVehicleOwnerPosition(player, event.occurredAt()))
+        .map(player -> new VehicleOwnerCandidate(player, distance(
+            player.getPositionX(), player.getPositionZ(), event.positionX(), event.positionZ())))
+        .filter(candidate -> candidate.distance() <= MAX_VEHICLE_OWNER_DISTANCE)
+        .sorted(Comparator.comparingDouble(VehicleOwnerCandidate::distance))
+        .toList();
+    if (candidates.isEmpty()) {
+      return Optional.empty();
+    }
+    VehicleOwnerCandidate nearest = candidates.getFirst();
+    if (candidates.size() > 1
+        && candidates.get(1).distance() - nearest.distance() < MIN_VEHICLE_OWNER_DISTANCE_ADVANTAGE) {
+      return Optional.empty();
+    }
+    return Optional.of(nearest.player());
+  }
+
+  private boolean isFreshVehicleOwnerPosition(T_PlayerCurrentState player, OffsetDateTime eventTime) {
+    if (player.getLastUpdated() == null || player.getLastUpdated().isAfter(eventTime.plusSeconds(5))) {
+      return false;
+    }
+    return !player.getLastUpdated().isBefore(eventTime.minus(MAX_VEHICLE_OWNER_POSITION_AGE));
+  }
+
+  private boolean isReusedVehicleEntity(T_VehicleCurrentState currentState, VehicleLogEvent event) {
+    if (!"VEHICLE_POST_INIT".equals(event.eventType())
+        || currentState.getVehicleEntityId() == null
+        || currentState.getPositionX() == null
+        || currentState.getPositionZ() == null
+        || event.positionX() == null
+        || event.positionZ() == null) {
+      return false;
+    }
+    return distance(currentState.getPositionX(), currentState.getPositionZ(),
+        event.positionX(), event.positionZ()) > VEHICLE_ENTITY_REUSE_DISTANCE;
   }
 
   private Optional<M_Player> findPlayerByCrossPlatformId(String crossPlatformId) {
@@ -888,6 +968,29 @@ public class GameLogImportService {
     double horizontalDistance = distance(currentState.getPositionX(), currentState.getPositionZ(),
         event.positionX(), event.positionZ());
     return BigDecimal.valueOf(horizontalDistance).setScale(1, RoundingMode.HALF_UP);
+  }
+
+  private BigDecimal playerMovementDistance(
+      Long playerId,
+      int playerEntityId,
+      OffsetDateTime occurredAt,
+      int positionX,
+      int positionZ,
+      String positionSourceType) {
+    if (!"LP_COMMAND".equals(positionSourceType)) {
+      return BigDecimal.ZERO;
+    }
+    Optional<T_PlayerPositionTransaction> previous = playerId == null
+        ? playerPositionRepository.findTopByPlayerEntityIdOrderByOccurredAtDescIdDesc(playerEntityId)
+        : playerPositionRepository.findTopByPlayerIdOrderByOccurredAtDescIdDesc(playerId);
+    if (previous.isEmpty()
+        || previous.get().getOccurredAt() == null
+        || !occurredAt.isAfter(previous.get().getOccurredAt())
+        || previous.get().getOccurredAt().isBefore(occurredAt.minus(MAX_PLAYER_MOVEMENT_GAP))) {
+      return BigDecimal.ZERO;
+    }
+    double movement = distance(previous.get().getPositionX(), previous.get().getPositionZ(), positionX, positionZ);
+    return BigDecimal.valueOf(movement).setScale(1, RoundingMode.HALF_UP);
   }
 
   private boolean shouldStoreServerMetric(ServerMetricLogEvent event) {
@@ -1153,6 +1256,9 @@ public class GameLogImportService {
   private record ActivePlayerDistance(ActivePlayer player, double distance) {
   }
 
-  private record VehicleOwner(Long playerId, String crossPlatformId) {
+  private record VehicleOwner(Long playerId, String crossPlatformId, String inferenceMethod) {
+  }
+
+  private record VehicleOwnerCandidate(T_PlayerCurrentState player, double distance) {
   }
 }

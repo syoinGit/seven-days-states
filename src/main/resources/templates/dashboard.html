@@ -79,6 +79,20 @@
             <span th:text="${player.ping ?: '-'}">-</span>
           </dd>
         </div>
+        <div>
+          <dt>移動距離</dt>
+          <dd>
+            <span th:text="${#numbers.formatDecimal(player.travelDistance ?: 0, 1, 1)}">0.0</span>
+            <span>m</span>
+          </dd>
+        </div>
+        <div>
+          <dt>乗り物移動</dt>
+          <dd>
+            <span th:text="${#numbers.formatDecimal(player.vehicleDistance ?: 0, 1, 1)}">0.0</span>
+            <span>m</span>
+          </dd>
+        </div>
       </dl>
     </article>
   </section>
@@ -115,11 +129,12 @@
           <div th:if="${#lists.isEmpty(dashboard.vehicleStatuses)}" class="empty">まだ乗り物ログがありません。</div>
           <div class="poi-row vehicle-row" th:each="vehicle : ${dashboard.vehicleStatuses}">
             <div>
-              <strong th:text="${vehicle.vehicleName}">vehicle</strong>
+              <strong th:text="${vehicle.vehicleName + ' #' + vehicle.vehicleEntityId}">vehicle</strong>
               <span th:text="${vehicle.active == false ? '消失' : '追跡中'}">追跡中</span>
               <p>
                 <b th:text="${vehicle.ownerName}">owner</b>
                 <span>の乗り物</span>
+                <small th:if="${vehicle.ownerInferenceMethod == 'nearest_fresh_player_position'}">（位置から推定）</small>
               </p>
             </div>
             <small>

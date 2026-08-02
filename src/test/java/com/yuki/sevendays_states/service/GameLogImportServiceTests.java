@@ -190,6 +190,88 @@ class GameLogImportServiceTests {
   }
 
   @Test
+  void infersVehicleOwnerFromFreshMatchingPlayerPosition() throws Exception {
+    Path log = writeLog("""
+        2026-07-29T13:58:10 10775.000 INF Executing command 'lp' by Telnet from app
+        0. id=171, PlayerA, pos=(452.0, 38.0, -615.0), rot=(0.0, 0.0, 0.0), remote=True, health=100, deaths=0, zombies=0, players=0, score=0, level=1, pltfmid=Steam_a, crossid=EOS_a, ip=127.0.0.1, ping=5
+        Total of 1 in the game
+        2026-07-29T13:58:16 10781.369 INF Vehicle PostInit [type=EntityBicycle, name=vehicleBicycle, id=2631], (454.0, 38.0, -615.0) (chunk 28, -39), rbPos (0.00, 0.00, 0.00)
+        """);
+
+    logImportService.importLogFile(log);
+
+    Long playerId = playerRepository.findAll().getFirst().getId();
+    assertThat(vehicleCurrentStateRepository.findById(2631)).hasValueSatisfying(row -> {
+      assertThat(row.getOwnerPlayerId()).isEqualTo(playerId);
+      assertThat(row.getOwnerCrossPlatformId()).isEqualTo("EOS_a");
+      assertThat(row.getOwnerInferenceMethod()).isEqualTo("nearest_fresh_player_position");
+    });
+    assertThat(vehiclePositionRepository.findAll().getFirst().getOwnerPlayerId()).isEqualTo(playerId);
+  }
+
+  @Test
+  void doesNotInferVehicleOwnerWhenPlayersAreEquallyClose() throws Exception {
+    Path log = writeLog("""
+        2026-07-29T13:58:10 10775.000 INF Executing command 'lp' by Telnet from app
+        0. id=171, PlayerA, pos=(0.0, 38.0, 0.0), rot=(0.0, 0.0, 0.0), remote=True, health=100, deaths=0, zombies=0, players=0, score=0, level=1, pltfmid=Steam_a, crossid=EOS_a, ip=127.0.0.1, ping=5
+        1. id=172, PlayerB, pos=(4.0, 38.0, 0.0), rot=(0.0, 0.0, 0.0), remote=True, health=100, deaths=0, zombies=0, players=0, score=0, level=1, pltfmid=Steam_b, crossid=EOS_b, ip=127.0.0.2, ping=5
+        Total of 2 in the game
+        2026-07-29T13:58:16 10781.369 INF Vehicle PostInit [type=EntityBicycle, name=vehicleBicycle, id=2631], (2.0, 38.0, 0.0) (chunk 0, 0), rbPos (0.00, 0.00, 0.00)
+        """);
+
+    logImportService.importLogFile(log);
+
+    assertThat(vehicleCurrentStateRepository.findById(2631)).hasValueSatisfying(row -> {
+      assertThat(row.getOwnerPlayerId()).isNull();
+      assertThat(row.getOwnerInferenceMethod()).isNull();
+    });
+  }
+
+  @Test
+  void recordsPlayerTravelDistanceFromConsecutiveLpPositions() throws Exception {
+    Path log = writeLog("""
+        2026-07-29T13:58:10 10775.000 INF Executing command 'lp' by Telnet from app
+        0. id=171, PlayerA, pos=(0.0, 38.0, 0.0), rot=(0.0, 0.0, 0.0), remote=True, health=100, deaths=0, zombies=0, players=0, score=0, level=1, pltfmid=Steam_a, crossid=EOS_a, ip=127.0.0.1, ping=5
+        Total of 1 in the game
+        2026-07-29T13:58:20 10785.000 INF Executing command 'lp' by Telnet from app
+        0. id=171, PlayerA, pos=(3.0, 38.0, 4.0), rot=(0.0, 0.0, 0.0), remote=True, health=100, deaths=0, zombies=0, players=0, score=0, level=1, pltfmid=Steam_a, crossid=EOS_a, ip=127.0.0.1, ping=5
+        Total of 1 in the game
+        """);
+
+    logImportService.importLogFile(log);
+
+    assertThat(playerPositionRepository.findAll())
+        .extracting(row -> row.getMovementDistance())
+        .usingComparatorForType(BigDecimal::compareTo, BigDecimal.class)
+        .containsExactly(BigDecimal.ZERO, new BigDecimal("5.0"));
+  }
+
+  @Test
+  void resetsDistanceWhenVehicleEntityIdIsReusedFarAway() throws Exception {
+    Path log = writeLog("""
+        2026-07-29T13:50:00 10000.000 INF 100000 VehicleManager write #0, id 2631, vehicleBicycle, (0.0, 38.0, 0.0), chunk 0, 0
+        2026-07-29T13:51:00 10060.000 INF 100001 VehicleManager write #0, id 2631, vehicleBicycle, (10.0, 38.0, 0.0), chunk 0, 0
+        2026-07-29T13:51:10 10070.000 INF VehicleManager RemoveTrackedVehicle [type=EntityBicycle, name=vehicleBicycle, id=2631], Killed
+        2026-07-29T13:52:00 10120.000 INF Vehicle PostInit [type=EntityBicycle, name=vehicleBicycle, id=2631], (1000.0, 38.0, 0.0) (chunk 62, 0), rbPos (0.00, 0.00, 0.00)
+        2026-07-29T13:53:00 10180.000 INF 100002 VehicleManager write #0, id 2631, vehicleBicycle, (1010.0, 38.0, 0.0), chunk 63, 0
+        """);
+
+    logImportService.importLogFile(log);
+
+    assertThat(vehicleCurrentStateRepository.findById(2631)).hasValueSatisfying(row ->
+        assertThat(row.getTotalDistance()).isEqualByComparingTo("10.0"));
+    assertThat(vehiclePositionRepository.findAll())
+        .extracting(row -> row.getMovementDistance())
+        .usingComparatorForType(BigDecimal::compareTo, BigDecimal.class)
+        .containsExactly(
+            BigDecimal.ZERO,
+            new BigDecimal("10.0"),
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            new BigDecimal("10.0"));
+  }
+
+  @Test
   void skipsServerMetricWithinIntervalAndStoresAfterInterval() throws Exception {
     Path log = writeLog("""
         2026-07-26T08:00:00 1000.000 INF Time: 10.00m FPS: 20.00 Heap: 1000.0MB Max: 1100.0MB Chunks: 10 CGO: 1 Ply: 1 Zom: 0 Ent: 1 (2) Items: 0 CO: 1 RSS: 2000.0MB

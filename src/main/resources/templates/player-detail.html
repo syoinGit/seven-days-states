@@ -58,6 +58,20 @@
           <dt>ワールド</dt>
           <dd th:text="${player.status.worldName ?: '-'}">-</dd>
         </div>
+        <div>
+          <dt>移動距離</dt>
+          <dd>
+            <span th:text="${#numbers.formatDecimal(player.status.travelDistance ?: 0, 1, 1)}">0.0</span>
+            <span>m</span>
+          </dd>
+        </div>
+        <div>
+          <dt>乗り物移動</dt>
+          <dd>
+            <span th:text="${#numbers.formatDecimal(player.status.vehicleDistance ?: 0, 1, 1)}">0.0</span>
+            <span>m</span>
+          </dd>
+        </div>
       </dl>
     </article>
   </section>
