@@ -215,11 +215,6 @@ a { color: inherit; }
 .pilot-info strong { font-size: 12px; }
 .pilot-info small { margin-top: 3px; color: var(--muted); font-size: 9px; }
 .pilot-info .pilot-vitals { color: #bfc3bd; font-family: monospace; }
-.hp-row { display: flex !important; gap: 7px; align-items: center; }
-.hp-track { display: block !important; width: 72px; height: 5px; overflow: hidden; border: 1px solid #364044; background: #080b0c; }
-.hp-track i { display: block; height: 100%; background: var(--good); box-shadow: 0 0 7px rgb(133 169 105 / 50%); }
-.hp-track i.wounded { background: var(--signal); }
-.hp-track i.critical { background: var(--danger); }
 .pilot > b { color: var(--muted); font-family: monospace; font-size: 10px; }
 .server-summary div { display: flex; justify-content: space-between; margin-top: 12px; }
 .server-summary div span { color: var(--muted); font-size: 9px; }
