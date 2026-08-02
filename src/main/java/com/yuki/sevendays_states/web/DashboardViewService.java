@@ -812,7 +812,7 @@ public class DashboardViewService {
         dailyActivity(),
         dailyKillActivity(),
         defeatedEnemyRankings(),
-        growthTrends());
+        growthTrend());
   }
 
   private List<DefeatedEnemyRanking> defeatedEnemyRankings() {
@@ -839,31 +839,24 @@ public class DashboardViewService {
     return dailyCounts("t_entity_kill_transaction");
   }
 
-  private List<GrowthTrend> growthTrends() {
+  private GrowthTrend growthTrend() {
     List<GrowthReport> reports = jdbcTemplate.query("""
-        select coalesce(player_name, '誰か') as player_name,
-               occurred_at, xp_total, xp_from_kill, xp_from_loot, xp_from_harvesting
+        select occurred_at, xp_from_kill, xp_from_loot, xp_from_harvesting
         from t_level_xp_summary_transaction
         order by occurred_at, level_xp_summary_transaction_id
         """, (rs, rowNum) -> new GrowthReport(
-        rs.getString("player_name"),
         rs.getObject("occurred_at", OffsetDateTime.class),
-        rs.getLong("xp_total"),
         rs.getLong("xp_from_kill"),
         rs.getLong("xp_from_loot"),
         rs.getLong("xp_from_harvesting")));
-    Map<String, GrowthAccumulator> players = new LinkedHashMap<>();
-    reports.forEach(report -> players.computeIfAbsent(
-        report.playerName(), ignored -> new GrowthAccumulator()).add(report));
-    return players.entrySet().stream()
-        .map(entry -> entry.getValue().toTrend(entry.getKey()))
-        .sorted(Comparator.comparingLong(GrowthTrend::totalXp).reversed()
-            .thenComparing(GrowthTrend::playerName))
-        .limit(8)
-        .toList();
+    GrowthAccumulator growth = new GrowthAccumulator();
+    reports.forEach(growth::add);
+    return growth.toTrend();
   }
 
-  private String growthChartPoints(List<GrowthPoint> points, long maxXp) {
+  private String growthChartPoints(
+      List<GrowthPoint> points, long maxXp,
+      java.util.function.ToLongFunction<GrowthPoint> value) {
     if (points.isEmpty()) {
       return "";
     }
@@ -871,39 +864,40 @@ public class DashboardViewService {
     return java.util.stream.IntStream.range(0, points.size())
         .mapToObj(index -> {
           double x = index * 300.0 / lastIndex;
-          double y = 76.0 - (points.get(index).cumulativeXp() * 68.0 / Math.max(1, maxXp));
+          double y = 76.0 - (value.applyAsLong(points.get(index)) * 68.0 / Math.max(1, maxXp));
           return String.format(java.util.Locale.ROOT, "%.1f,%.1f", x, y);
         })
         .collect(java.util.stream.Collectors.joining(" "));
   }
 
   private final class GrowthAccumulator {
-    private long total;
     private long kills;
     private long loot;
     private long harvest;
     private final List<GrowthPoint> points = new ArrayList<>();
 
     private void add(GrowthReport report) {
-      total += report.totalXp();
       kills += report.killXp();
       loot += report.lootXp();
       harvest += report.harvestXp();
       points.add(new GrowthPoint(
           report.occurredAt().atZoneSameInstant(DisplayTimeFormatter.JST).toLocalDate().toString(),
-          total));
+          kills, harvest, loot));
     }
 
-    private GrowthTrend toTrend(String playerName) {
-      List<GrowthPoint> visiblePoints = points.size() <= 24
+    private GrowthTrend toTrend() {
+      List<GrowthPoint> visiblePoints = points.size() <= 30
           ? List.copyOf(points)
-          : java.util.stream.IntStream.range(0, 24)
-              .map(index -> index * (points.size() - 1) / 23)
+          : java.util.stream.IntStream.range(0, 30)
+              .map(index -> index * (points.size() - 1) / 29)
               .mapToObj(points::get)
               .toList();
+      long maxXp = Math.max(kills, Math.max(harvest, loot));
       return new GrowthTrend(
-          playerName, total, kills, loot, harvest, points.size(),
-          growthChartPoints(visiblePoints, total),
+          kills, loot, harvest, points.size(),
+          growthChartPoints(visiblePoints, maxXp, GrowthPoint::killXp),
+          growthChartPoints(visiblePoints, maxXp, GrowthPoint::harvestXp),
+          growthChartPoints(visiblePoints, maxXp, GrowthPoint::lootXp),
           visiblePoints.isEmpty() ? "" : visiblePoints.getFirst().date(),
           visiblePoints.isEmpty() ? "" : visiblePoints.getLast().date());
     }
@@ -1319,7 +1313,7 @@ public class DashboardViewService {
       List<DailyActivity> dailyActivity,
       List<DailyActivity> dailyKills,
       List<DefeatedEnemyRanking> defeatedEnemies,
-      List<GrowthTrend> growthTrends
+      GrowthTrend growthTrend
   ) {
   }
 
@@ -1328,16 +1322,16 @@ public class DashboardViewService {
   }
 
   public record GrowthTrend(
-      String playerName, long totalXp, long killXp, long lootXp, long harvestXp, long reports,
-      String chartPoints, String firstDate, String lastDate) {
+      long killXp, long lootXp, long harvestXp, long reports,
+      String killChartPoints, String harvestChartPoints, String lootChartPoints,
+      String firstDate, String lastDate) {
   }
 
   private record GrowthReport(
-      String playerName, OffsetDateTime occurredAt, long totalXp,
-      long killXp, long lootXp, long harvestXp) {
+      OffsetDateTime occurredAt, long killXp, long lootXp, long harvestXp) {
   }
 
-  private record GrowthPoint(String date, long cumulativeXp) {
+  private record GrowthPoint(String date, long killXp, long harvestXp, long lootXp) {
   }
 
   public record AdventureRanking(

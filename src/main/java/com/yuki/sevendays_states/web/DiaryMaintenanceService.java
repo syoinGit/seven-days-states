@@ -75,9 +75,8 @@ public class DiaryMaintenanceService {
           union select player_name from t_player_position_transaction where occurred_at >= ? and occurred_at < ?
           union select player_name from t_entity_kill_transaction where occurred_at >= ? and occurred_at < ?
           union select player_name from t_sleeper_transaction where occurred_at >= ? and occurred_at < ?
-          union select player_name from t_level_xp_summary_transaction where occurred_at >= ? and occurred_at < ?
         ) players where player_name is not null and player_name <> '' order by player_name
-        """, String.class, from, to, from, to, from, to, from, to, from, to, from, to);
+        """, String.class, from, to, from, to, from, to, from, to, from, to);
     List<PlayerDay> participants = playerNames.stream()
         .map(name -> playerDay(name, from, to))
         .toList();
@@ -127,10 +126,12 @@ public class DiaryMaintenanceService {
     long eventCount = countedEvents == null ? 0 : countedEvents;
     Optional<AiCommentService.AiCommentEntry> diary = aiCommentService.findByDiaryDate(date);
     BloodMoonContext bloodMoon = bloodMoonContext(to, clocks);
+    XpSummary xp = xpSummary(from, to);
     String generationData = generationData(
-        date, gameDayLabel, participants, events, enemies, pois, bloodMoon);
+        date, gameDayLabel, participants, events, enemies, pois, bloodMoon, xp);
     return new DiaryPacket(date, gameDayLabel, clocks.isEmpty() ? "未観測" : clockLabel(clocks.getLast()),
-        eventCount, participants, events, enemies, pois, bloodMoon, generationData, diary.orElse(null));
+        eventCount, participants, events, enemies, pois, bloodMoon, xp, generationData,
+        diary.orElse(null));
   }
 
   private PlayerDay playerDay(String name, OffsetDateTime from, OffsetDateTime to) {
@@ -145,14 +146,13 @@ public class DiaryMaintenanceService {
         join m_player p on p.id = v.owner_player_id
         where p.player_name = ? and v.occurred_at >= ? and v.occurred_at < ?
         """, BigDecimal.class, name, from, to);
-    XpSummary xp = xpSummary(name, from, to);
     return new PlayerDay(
         name, joins, leaves, kills, encounters, position,
         vehicle == null ? BigDecimal.ZERO : vehicle,
-        observedPlace(name, from, to, true), observedPlace(name, from, to, false), xp);
+        observedPlace(name, from, to, true), observedPlace(name, from, to, false));
   }
 
-  private XpSummary xpSummary(String name, OffsetDateTime from, OffsetDateTime to) {
+  private XpSummary xpSummary(OffsetDateTime from, OffsetDateTime to) {
     return jdbcTemplate.queryForObject("""
         select coalesce(sum(xp_total), 0) as total,
                coalesce(sum(xp_from_kill), 0) as kills,
@@ -160,10 +160,10 @@ public class DiaryMaintenanceService {
                coalesce(sum(xp_from_harvesting), 0) as harvest,
                count(*) as reports
         from t_level_xp_summary_transaction
-        where player_name = ? and occurred_at >= ? and occurred_at < ?
+        where occurred_at >= ? and occurred_at < ?
         """, (rs, rowNum) -> new XpSummary(
         rs.getLong("total"), rs.getLong("kills"), rs.getLong("loot"),
-        rs.getLong("harvest"), rs.getLong("reports")), name, from, to);
+        rs.getLong("harvest"), rs.getLong("reports")), from, to);
   }
 
   private String observedPlace(
@@ -237,7 +237,7 @@ public class DiaryMaintenanceService {
 
   private String generationData(
       LocalDate date, String gameDay, List<PlayerDay> players, List<EventCount> events,
-      List<EventCount> enemies, List<String> pois, BloodMoonContext bloodMoon) {
+      List<EventCount> enemies, List<String> pois, BloodMoonContext bloodMoon, XpSummary xp) {
     List<String> lines = new ArrayList<>();
     lines.add("# WATCHPOINT 冒険日誌・生成プロンプト");
     lines.add("");
@@ -255,7 +255,7 @@ public class DiaryMaintenanceService {
     lines.add("SLEEPER_SPAWNは戦闘数や一斉出現数ではなく、建物探索によって配置済みのスリーパーゾンビが目覚めた記録。『眠っていた感染者を起こした』『廃墟の奥で気配が動き出した』などと表現し、『同時に襲来した』『すべて討伐した』とは書かない。");
     lines.add("ゲーム内Dayが進んでいる場合は、拠点・装備・探索範囲の発展や強敵の増加を、当日のデータが裏付ける範囲で自然に反映する。");
     lines.add("Blood Moonの前日・当日・翌日は、防衛準備、物資確保、緊張、生還後の安堵などを当日の事実に沿って日誌の空気へ反映する。");
-    lines.add("経験値は活動傾向の補助材料。討伐XPが多ければ戦闘、採取XPが多ければ資源確保、探索・物資XPが多ければ探索を中心に描けるが、数値だけで具体的行動を断定しない。");
+    lines.add("経験値は全プレイヤー共通の活動傾向として扱う。討伐XPが多ければ戦闘、採取XPが多ければ資源確保、探索・物資XPが多ければ探索を中心に描けるが、特定プレイヤーの成果とは断定しない。");
     lines.add("");
     lines.add("## 当日の観測データ");
     lines.add("実日付: " + date);
@@ -266,9 +266,11 @@ public class DiaryMaintenanceService {
         + "、遭遇" + player.encounters() + "、位置移動" + player.positionDistance().setScale(1, java.math.RoundingMode.HALF_UP)
         + "m、乗り物" + player.vehicleDistance().setScale(1, java.math.RoundingMode.HALF_UP)
         + "m、ログイン" + player.joins() + "回、開始地点 " + player.startPlace()
-        + "、終了地点 " + player.endPlace() + "、XP合計" + player.xp().total()
-        + "（討伐" + player.xp().kills() + "／採取" + player.xp().harvest()
-        + "／探索・物資" + player.xp().loot() + "）"));
+        + "、終了地点 " + player.endPlace()));
+    lines.add("全プレイヤー共通XP:");
+    lines.add("- 討伐XP: " + xp.kills());
+    lines.add("- 採取XP: " + xp.harvest());
+    lines.add("- 探索・物資XP: " + xp.loot());
     lines.add("注意: 位置移動には乗車中の移動が含まれる可能性があるため、乗り物距離と単純合算しない。");
     lines.add("注意: 開始・終了地点はログイン／ログアウトそのものの座標ではなく、その日の最初と最後に取得できた位置ログから求めた最寄りPOI。");
     lines.add("注意: 現在のログには建築専用XPがないため、採取XPを建築XPとして扱わない。");
@@ -304,14 +306,14 @@ public class DiaryMaintenanceService {
   public record DiaryPacket(
       LocalDate date, String gameDayLabel, String lastWorldTime, long eventCount,
       List<PlayerDay> participants, List<EventCount> events, List<EventCount> enemies,
-      List<String> pois, BloodMoonContext bloodMoon, String generationData,
+      List<String> pois, BloodMoonContext bloodMoon, XpSummary xp, String generationData,
       AiCommentService.AiCommentEntry diary) {
   }
 
   public record PlayerDay(
       String name, long joins, long leaves, long kills, long encounters,
       BigDecimal positionDistance, BigDecimal vehicleDistance,
-      String startPlace, String endPlace, XpSummary xp) {
+      String startPlace, String endPlace) {
   }
 
   public record XpSummary(long total, long kills, long loot, long harvest, long reports) {
