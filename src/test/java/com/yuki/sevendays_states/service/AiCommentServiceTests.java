@@ -32,22 +32,23 @@ class AiCommentServiceTests {
   }
 
   @Test
-  void publishesAndReturnsLatestManualComment() {
-    service.publish(" 荒野通信 ", " 今日も生存を確認。 ", "test-editor-key");
-    service.publish("二報", "病院の探索が進みました。", "test-editor-key");
+  void publishesAndReturnsLatestDailyDiary() {
+    service.publish(LocalDate.of(2026, 8, 1), " 荒野通信 ", " 今日も生存を確認。 ", "test-editor-key");
+    service.publish(LocalDate.of(2026, 8, 2), "二報", "病院の探索が進みました。", "test-editor-key");
 
-    assertThat(service.latest()).get()
+    assertThat(service.latestDiary()).get()
         .satisfies(comment -> {
           assertThat(comment.title()).isEqualTo("二報");
           assertThat(comment.body()).isEqualTo("病院の探索が進みました。");
           assertThat(comment.sourceType()).isEqualTo("MANUAL_BETA");
         });
-    assertThat(service.history()).hasSize(2);
+    assertThat(service.diaries()).hasSize(2);
   }
 
   @Test
   void rejectsBlankComment() {
-    assertThatThrownBy(() -> service.publish("", "", "test-editor-key"))
+    assertThatThrownBy(() -> service.publish(
+        LocalDate.of(2026, 8, 2), "", "", "test-editor-key"))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
