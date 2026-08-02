@@ -205,6 +205,33 @@ a { color: inherit; }
 .nav-button { padding: 9px 13px; border: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 700; text-decoration: none; }
 .nav-button:hover { border-color: var(--signal); color: var(--signal); }
 
+.form-notice { margin: 0; padding: 12px 15px; border: 1px solid var(--line); font-size: 12px; }
+.form-notice.success { border-color: var(--good); color: var(--good); background: rgb(133 169 105 / 9%); }
+.form-notice.error { border-color: var(--danger); color: #df7767; background: rgb(199 78 60 / 9%); }
+.ai-editor-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(250px, .7fr); gap: 18px; }
+.ai-comment-form { display: grid; gap: 16px; padding: 20px; }
+.ai-comment-form label { display: grid; gap: 7px; color: var(--signal); font-size: 9px; font-weight: 800; letter-spacing: .12em; }
+.ai-comment-form input, .ai-comment-form textarea { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 0; outline: 0; color: var(--text); background: #0b0f10; font: inherit; line-height: 1.6; }
+.ai-comment-form input:focus, .ai-comment-form textarea:focus { border-color: var(--signal); box-shadow: 0 0 0 2px var(--signal-soft); }
+.ai-comment-form textarea { resize: vertical; }
+.form-actions { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
+.form-actions small { color: var(--muted); font-size: 9px; }
+.form-actions button { padding: 10px 16px; border: 1px solid var(--signal); color: #111; background: var(--signal); font-weight: 900; cursor: pointer; }
+.form-actions button:hover { filter: brightness(1.12); }
+.editor-disabled { margin: 20px; padding: 16px; border: 1px dashed var(--danger); color: var(--muted); font-size: 12px; line-height: 1.7; }
+.editor-disabled code { color: var(--signal); }
+.ai-beta-note { padding: 20px; }
+.ai-beta-note h2 { margin: 10px 0; font-size: 18px; }
+.ai-beta-note > p:not(.module-code) { color: var(--muted); font-size: 11px; line-height: 1.8; }
+.ai-beta-note dl { display: grid; gap: 12px; margin-top: 22px; }
+.ai-comment-history { margin: 0; padding: 0; list-style: none; }
+.ai-comment-history li { padding: 18px 20px; border-bottom: 1px solid var(--steel); }
+.ai-comment-history li.latest { border-left: 3px solid var(--signal); background: linear-gradient(90deg, var(--signal-soft), transparent 42%); }
+.ai-comment-history header { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-family: monospace; font-size: 9px; }
+.ai-comment-history header span { color: var(--signal); }
+.ai-comment-history h3 { margin: 10px 0 7px; font-size: 15px; }
+.ai-comment-history p { margin: 0; color: #c9cbc5; font-size: 13px; line-height: 1.7; white-space: pre-line; }
+
 .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .metric-card { position: relative; padding: 18px; overflow: hidden; }
 .metric-card::before { position: absolute; top: 0; left: 0; width: 35%; height: 2px; content: ""; background: var(--signal); }
@@ -332,6 +359,7 @@ dd { margin: 4px 0 0; color: #c4c7c1; font-size: 11px; overflow-wrap: anywhere; 
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
   .detail-grid, .main-grid { grid-template-columns: 1fr; }
   .insight-grid { grid-template-columns: 1fr; }
+  .ai-editor-grid { grid-template-columns: 1fr; }
   .ranking-grid { grid-template-columns: 1fr; }
   .poi-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

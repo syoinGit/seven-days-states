@@ -69,7 +69,11 @@ SEVEN_DAYS_LOG_SOURCE=file
 SEVEN_DAYS_ROOT=7dtd
 SEVEN_DAYS_DOCKER_LOG_ENABLED=false
 SEVEN_DAYS_TELNET_ENABLED=false
+AI_COMMENT_EDITOR_KEY=replace-with-a-long-random-secret
 ```
+
+`AI_COMMENT_EDITOR_KEY` protects manual publishing on `/ai-comments`. If it is
+empty, the comment archive remains visible but the publishing form is disabled.
 
 Spring Boot does not automatically load `.env` when started directly, so export it before local execution.
 

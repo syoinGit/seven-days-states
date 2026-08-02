@@ -1,6 +1,7 @@
 package com.yuki.sevendays_states.web;
 
 import com.yuki.sevendays_states.config.SevenDaysDataProperties;
+import com.yuki.sevendays_states.service.AiCommentService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
@@ -31,6 +32,7 @@ public class DashboardViewService {
 
   private final JdbcTemplate jdbcTemplate;
   private final SevenDaysDataProperties properties;
+  private final AiCommentService aiCommentService;
   private final PoiNameService poiNameService;
   private final EventMessageFormatter eventMessageFormatter;
   private final DisplayTimeFormatter displayTimeFormatter = new DisplayTimeFormatter();
@@ -1098,6 +1100,11 @@ public class DashboardViewService {
       List<TravelEntry> travelEntries,
       List<VehicleStatus> vehicleStatuses,
       ServerState serverState) {
+    Optional<AiCommentService.AiCommentEntry> manualComment = aiCommentService.latest();
+    if (manualComment.isPresent()) {
+      AiCommentService.AiCommentEntry comment = manualComment.get();
+      return new AiComment(comment.title(), comment.body());
+    }
     long onlinePlayers = playerStatuses.stream()
         .filter(player -> Boolean.TRUE.equals(player.online()))
         .count();
