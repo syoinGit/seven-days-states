@@ -31,8 +31,11 @@ class DiaryMaintenanceServiceTests {
     jdbcTemplate.update("delete from t_ai_comment");
     jdbcTemplate.update("delete from t_world_time_observation");
     jdbcTemplate.update("delete from t_entity_kill_transaction");
+    jdbcTemplate.update("delete from t_level_xp_summary_transaction");
+    jdbcTemplate.update("delete from t_world_event_transaction");
     jdbcTemplate.update("delete from t_player_position_transaction");
     jdbcTemplate.update("delete from t_player_join_transaction");
+    jdbcTemplate.update("delete from m_world_poi");
   }
 
   @Test
@@ -50,17 +53,35 @@ class DiaryMaintenanceServiceTests {
         values (?, 'PlayerA', 101, 'log', 'diary-join')
         """, time);
     jdbcTemplate.update("""
+        insert into m_world_poi
+        (source_path, source_hash, world_name, poi_name, category, x, y, z)
+        values ('world', 'diary-poi-start', 'World', 'hospital_01', 'hospital', 10, 40, 20),
+               ('world', 'diary-poi-end', 'World', 'farm_01', 'farm', 200, 40, 220)
+        """);
+    jdbcTemplate.update("""
         insert into t_player_position_transaction
         (occurred_at, player_name, player_entity_id, position_x, position_y, position_z,
          position_source_type, source_event_hash, source_file, movement_distance)
-        values (?, 'PlayerA', 101, 10, 40, 20, 'LP_COMMAND', 'diary-pos', 'telnet', 125.5)
-        """, time.plusMinutes(1));
+        values (?, 'PlayerA', 101, 10, 40, 20, 'LP_COMMAND', 'diary-pos', 'telnet', 125.5),
+               (?, 'PlayerA', 101, 200, 40, 220, 'LP_COMMAND', 'diary-pos-end', 'telnet', 0)
+        """, time.plusMinutes(1), time.plusMinutes(4));
     jdbcTemplate.update("""
         insert into t_entity_kill_transaction
         (occurred_at, player_name, player_entity_id, target_entity_type, target_entity_id,
          source_file, source_log_hash)
         values (?, 'PlayerA', 101, 'zombieNurse', 501, 'log', 'diary-kill')
         """, time.plusMinutes(2));
+    jdbcTemplate.update("""
+        insert into t_level_xp_summary_transaction
+        (occurred_at, player_name, player_entity_id, xp_from_loot, xp_from_harvesting,
+         xp_from_kill, xp_total, source_file, source_log_hash)
+        values (?, 'PlayerA', 101, 20, 30, 50, 100, 'log', 'diary-xp')
+        """, time.plusMinutes(3));
+    jdbcTemplate.update("""
+        insert into t_world_event_transaction
+        (occurred_at, event_type, detail_text, source_file, source_log_hash, raw_line)
+        values (?, 'BLOOD_MOON', 'Day 21 / 周期 7', 'log', 'diary-blood', 'BloodMoon SetDay')
+        """, time.minusMinutes(1));
 
     DiaryMaintenanceService.DiaryPacket packet = service.packet(date);
 
@@ -69,8 +90,15 @@ class DiaryMaintenanceServiceTests {
       assertThat(player.name()).isEqualTo("PlayerA");
       assertThat(player.kills()).isOne();
       assertThat(player.positionDistance()).isEqualByComparingTo("125.5");
+      assertThat(player.startPlace()).contains("病院");
+      assertThat(player.endPlace()).contains("農場");
+      assertThat(player.xp().total()).isEqualTo(100);
     });
-    assertThat(packet.generationData()).contains("PlayerA", "討伐1", "位置移動125.5m");
+    assertThat(packet.bloodMoon().status()).contains("あと1日");
+    assertThat(packet.generationData()).contains(
+        "PlayerA", "討伐1", "位置移動125.5m", "SLEEPER_SPAWNは戦闘数や一斉出現数ではなく",
+        "開始地点", "終了地点", "XP合計100", "Blood Moonまであと1日",
+        "現在のログには建築専用XPがない");
     assertThat(service.days()).extracting(DiaryMaintenanceService.DiaryDay::date).contains(date);
   }
 }
