@@ -44,7 +44,7 @@ class DashboardControllerTests {
     assertThat(controller.kills(killModel)).isEqualTo("kill-detail");
     assertThat(controller.vehicles(vehicleModel)).isEqualTo("vehicle-detail");
     assertThat(controller.exploration(explorationModel)).isEqualTo("exploration-detail");
-    assertThat(controller.aiComments(aiCommentModel)).isEqualTo("redirect:/maintenance/diaries");
+    assertThat(controller.aiComments(aiCommentModel)).isEqualTo("redirect:/diaries");
     assertThat(serverModel).containsKey("server");
     assertThat(killModel).containsKey("kills");
     assertThat(vehicleModel).containsKey("vehicles");
@@ -61,6 +61,8 @@ class DashboardControllerTests {
     template += Files.readString(Path.of("src/main/resources/templates/diary-maintenance.html"));
     template += Files.readString(Path.of("src/main/resources/templates/diary-generation-data.html"));
     template += Files.readString(Path.of("src/main/resources/templates/diary-editor.html"));
+    template += Files.readString(Path.of("src/main/resources/templates/diaries.html"));
+    template += Files.readString(Path.of("src/main/resources/templates/diary-detail.html"));
 
     assertThat(template)
         .doesNotContain("Steam_")
@@ -90,5 +92,13 @@ class DashboardControllerTests {
     assertThat(listModel).containsKey("days");
     assertThat(dataModel).containsKey("packet");
     assertThat(editorModel).containsKeys("packet", "editorEnabled");
+  }
+
+  @Test
+  void publicDiaryListReturnsDatabaseBackedView() {
+    ConcurrentModel model = new ConcurrentModel();
+
+    assertThat(controller.diaries(model)).isEqualTo("diaries");
+    assertThat(model).containsKey("diaries");
   }
 }

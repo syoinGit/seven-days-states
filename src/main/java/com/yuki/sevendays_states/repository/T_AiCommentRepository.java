@@ -12,5 +12,9 @@ public interface T_AiCommentRepository extends JpaRepository<T_AiComment, Long> 
 
   Optional<T_AiComment> findByDiaryDate(LocalDate diaryDate);
 
+  Optional<T_AiComment> findTopByDiaryDateIsNotNullOrderByDiaryDateDescPublishedAtDesc();
+
+  List<T_AiComment> findTop100ByDiaryDateIsNotNullOrderByDiaryDateDescPublishedAtDesc();
+
   List<T_AiComment> findTop50ByOrderByPublishedAtDescIdDesc();
 }

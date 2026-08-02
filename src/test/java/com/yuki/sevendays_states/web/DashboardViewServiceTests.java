@@ -3,6 +3,7 @@ package com.yuki.sevendays_states.web;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,14 +57,15 @@ class DashboardViewServiceTests {
   void latestManualAiCommentOverridesGeneratedDashboardComment() {
     OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
     jdbcTemplate.update("""
-        insert into t_ai_comment (title, body, published_at, source_type)
-        values ('荒野通信', '今日は病院探索が進みました。', ?, 'MANUAL_BETA')
+        insert into t_ai_comment (diary_date, title, body, published_at, source_type)
+        values ('2026-08-02', '荒野通信', '今日は病院探索が進みました。', ?, 'MANUAL_BETA')
         """, now);
 
     DashboardViewService.AiComment comment = dashboardViewService.dashboard().aiComment();
 
     assertThat(comment.title()).isEqualTo("荒野通信");
     assertThat(comment.body()).isEqualTo("今日は病院探索が進みました。");
+    assertThat(comment.diaryDate()).isEqualTo(LocalDate.of(2026, 8, 2));
   }
 
   @Test

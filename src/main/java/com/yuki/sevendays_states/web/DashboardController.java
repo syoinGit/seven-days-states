@@ -20,6 +20,7 @@ public class DashboardController {
   private final DashboardViewService dashboardViewService;
   private final AiCommentService aiCommentService;
   private final DiaryMaintenanceService diaryMaintenanceService;
+  private final DiaryViewService diaryViewService;
 
   @GetMapping("/")
   public String index(Model model) {
@@ -61,7 +62,21 @@ public class DashboardController {
 
   @GetMapping("/ai-comments")
   public String aiComments(Model model) {
-    return "redirect:/maintenance/diaries";
+    return "redirect:/diaries";
+  }
+
+  @GetMapping("/diaries")
+  public String diaries(Model model) {
+    model.addAttribute("diaries", diaryViewService.archive());
+    return "diaries";
+  }
+
+  @GetMapping("/diaries/{date}")
+  public String diary(@PathVariable LocalDate date, Model model) {
+    DiaryViewService.DiaryDetail diary = diaryViewService.detail(date)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+    model.addAttribute("diary", diary);
+    return "diary-detail";
   }
 
   @PostMapping("/ai-comments")

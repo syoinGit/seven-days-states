@@ -37,6 +37,8 @@
       <div>
         <p th:text="${dashboard.aiComment.title}">AI観測コメント</p>
         <strong th:text="${dashboard.aiComment.body}">荒野は今日も平常運転です。</strong>
+        <a class="ai-read-more" th:if="${dashboard.aiComment.diaryDate != null}"
+           th:href="@{/diaries/{date}(date=${dashboard.aiComment.diaryDate})}">続きを読む <span aria-hidden="true">→</span></a>
       </div>
     </section>
 
