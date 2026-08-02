@@ -13,6 +13,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -437,7 +438,18 @@ public class DashboardViewService {
           union all
           select occurred_at,
                  transaction_type as kind,
-                 player_name,
+                 coalesce(s.player_name, (
+                   select pp.player_name
+                   from t_player_position_transaction pp
+                   where pp.occurred_at between s.occurred_at - interval '120' second
+                                             and s.occurred_at + interval '120' second
+                     and ((pp.position_x - s.position_x) * (pp.position_x - s.position_x)
+                       + (pp.position_z - s.position_z) * (pp.position_z - s.position_z)) <= 22500
+                   order by ((pp.position_x - s.position_x) * (pp.position_x - s.position_x)
+                         + (pp.position_z - s.position_z) * (pp.position_z - s.position_z)),
+                            pp.occurred_at desc
+                   limit 1
+                 )) as player_name,
                  case when transaction_type = 'SLEEPER_SPAWN'
                    then '眠っていた敵を起こした'
                    else '眠っていた敵が再配置された'
@@ -578,7 +590,43 @@ public class DashboardViewService {
             displayEventPoi(rs.getString("poi_name"))),
         displayEventPoi(rs.getString("poi_name")),
         coordinate(rs.getObject("x"), rs.getObject("y"), rs.getObject("z"))));
-    return condenseTimeline(entries, 30);
+    return condenseTimeline(aggregateSleeperEncounters(entries), 30);
+  }
+
+  private List<TravelEntry> aggregateSleeperEncounters(List<TravelEntry> entries) {
+    Map<String, List<TravelEntry>> groups = new LinkedHashMap<>();
+    for (TravelEntry entry : entries) {
+      String key = "SLEEPER_SPAWN".equals(entry.kind())
+          ? entry.kind() + "|" + entry.occurredAt() + "|" + entry.actor() + "|" + entry.poiName()
+          : "EVENT|" + groups.size();
+      groups.computeIfAbsent(key, ignored -> new ArrayList<>()).add(entry);
+    }
+    List<TravelEntry> aggregated = new ArrayList<>();
+    for (List<TravelEntry> group : groups.values()) {
+      TravelEntry first = group.getFirst();
+      if (!"SLEEPER_SPAWN".equals(first.kind()) || group.size() == 1) {
+        aggregated.add(first);
+        continue;
+      }
+      List<String> enemies = group.stream()
+          .map(TravelEntry::detailText)
+          .filter(name -> name != null && !name.isBlank())
+          .distinct()
+          .limit(3)
+          .toList();
+      String enemySummary = group.size() >= 4
+          ? "大量の敵（" + group.size() + "体）"
+          : String.join("、", enemies) + "（" + group.size() + "体）";
+      String place = first.poiName() == null || first.poiName().isBlank()
+          ? "探索先"
+          : first.poiName();
+      String message = first.actor() + "が" + place + "で" + enemySummary
+          + "を目覚めさせた！\n静かな探索は、ここで終了。";
+      aggregated.add(new TravelEntry(
+          first.occurredAt(), first.kind(), first.tone(), first.actor(),
+          first.actionText(), enemySummary, message, first.poiName(), first.coordinate()));
+    }
+    return List.copyOf(aggregated);
   }
 
   private List<TravelEntry> condenseTimeline(List<TravelEntry> entries, int limit) {

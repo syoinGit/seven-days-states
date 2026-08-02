@@ -81,7 +81,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class GameLogImportService {
 
   private static final int MAX_PLAYER_POSITION_INFERENCE_DISTANCE = 250;
-  private static final int MIN_PLAYER_POSITION_INFERENCE_DISTANCE_ADVANTAGE = 50;
   private static final int MAX_VEHICLE_OWNER_DISTANCE = 8;
   private static final int MAX_VEHICLE_OWNER_VERTICAL_DISTANCE = 5;
   private static final int MIN_VEHICLE_OWNER_DISTANCE_ADVANTAGE = 3;
@@ -483,17 +482,14 @@ public class GameLogImportService {
             "nearest_current_state_position",
             false,
             player.getLastUpdated()), distance(player.getPositionX(), player.getPositionZ(), x, z)))
-        .sorted(Comparator.comparingDouble(ActivePlayerDistance::distance))
+        .sorted(Comparator.comparingDouble(ActivePlayerDistance::distance)
+            .thenComparing(candidate -> candidate.player().playerEntityId()))
         .toList();
     if (distances.isEmpty()) {
       return Optional.empty();
     }
     ActivePlayerDistance nearest = distances.getFirst();
     if (nearest.distance() > MAX_PLAYER_POSITION_INFERENCE_DISTANCE) {
-      return Optional.empty();
-    }
-    if (distances.size() > 1
-        && distances.get(1).distance() - nearest.distance() < MIN_PLAYER_POSITION_INFERENCE_DISTANCE_ADVANTAGE) {
       return Optional.empty();
     }
     return Optional.of(nearest.player());
@@ -1190,17 +1186,14 @@ public class GameLogImportService {
       List<ActivePlayerDistance> distances = activePlayers.values().stream()
           .filter(player -> player.x() != null && player.z() != null)
           .map(player -> new ActivePlayerDistance(player, distance(player, x, z)))
-          .sorted(Comparator.comparingDouble(ActivePlayerDistance::distance))
+          .sorted(Comparator.comparingDouble(ActivePlayerDistance::distance)
+              .thenComparing(candidate -> candidate.player().playerEntityId()))
           .toList();
       if (distances.isEmpty()) {
         return Optional.empty();
       }
       ActivePlayerDistance nearest = distances.getFirst();
       if (nearest.distance() > MAX_PLAYER_POSITION_INFERENCE_DISTANCE) {
-        return Optional.empty();
-      }
-      if (distances.size() > 1
-          && distances.get(1).distance() - nearest.distance() < MIN_PLAYER_POSITION_INFERENCE_DISTANCE_ADVANTAGE) {
         return Optional.empty();
       }
       return Optional.of(nearest.player()
