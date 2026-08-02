@@ -36,13 +36,16 @@ class DashboardControllerTests {
     ConcurrentModel serverModel = new ConcurrentModel();
     ConcurrentModel killModel = new ConcurrentModel();
     ConcurrentModel vehicleModel = new ConcurrentModel();
+    ConcurrentModel explorationModel = new ConcurrentModel();
 
     assertThat(controller.server(serverModel)).isEqualTo("server-detail");
     assertThat(controller.kills(killModel)).isEqualTo("kill-detail");
     assertThat(controller.vehicles(vehicleModel)).isEqualTo("vehicle-detail");
+    assertThat(controller.exploration(explorationModel)).isEqualTo("exploration-detail");
     assertThat(serverModel).containsKey("server");
     assertThat(killModel).containsKey("kills");
     assertThat(vehicleModel).containsKey("vehicles");
+    assertThat(explorationModel).containsKey("exploration");
   }
 
   @Test
@@ -51,6 +54,7 @@ class DashboardControllerTests {
         + Files.readString(Path.of("src/main/resources/templates/server-detail.html"))
         + Files.readString(Path.of("src/main/resources/templates/kill-detail.html"))
         + Files.readString(Path.of("src/main/resources/templates/vehicle-detail.html"));
+    template += Files.readString(Path.of("src/main/resources/templates/exploration-detail.html"));
 
     assertThat(template)
         .doesNotContain("Steam_")

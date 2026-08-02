@@ -15,7 +15,7 @@
 
 <main class="layout detail-page">
   <header class="page-title">
-    <nav class="breadcrumbs"><a th:href="@{/}">冒険記録</a><span>/</span><b>プレイヤー</b></nav>
+    <nav class="breadcrumbs"><a th:href="@{/}"><span aria-hidden="true">⌂</span> 冒険記録</a><span>›</span><b><span aria-hidden="true">♙</span> プレイヤー</b></nav>
     <p class="eyebrow">PLAYER / PERSONAL RECORD</p>
     <h1 th:text="${player.status.playerName}">player</h1>
     <p><span th:text="${player.status.online == false ? 'オフライン' : 'オンライン'}">オンライン</span> / <span th:text="${player.status.poiName}">荒野のどこか</span></p>

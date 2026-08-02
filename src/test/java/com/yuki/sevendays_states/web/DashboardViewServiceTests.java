@@ -45,6 +45,7 @@ class DashboardViewServiceTests {
     jdbcTemplate.update("delete from t_vehicle_current_state");
     jdbcTemplate.update("delete from t_world_event_transaction");
     jdbcTemplate.update("delete from m_japanese_translation");
+    jdbcTemplate.update("delete from m_world_poi");
     jdbcTemplate.update("delete from m_player");
   }
 
@@ -109,6 +110,10 @@ class DashboardViewServiceTests {
   @Test
   void detailViewsExposeServerKillAndVehicleData() {
     jdbcTemplate.update("""
+        insert into m_player (id, player_key, platform, user_id, player_name)
+        values (1, 'EOS:eos-a', 'EOS', 'eos-a', 'PlayerA')
+        """);
+    jdbcTemplate.update("""
         insert into t_server_metric
         (occurred_at, fps, zombie_count, entity_count, rss_mb, source_file, source_log_hash)
         values (timestamp with time zone '2026-08-02 01:00:00+00:00', 19.5, 8, 20, 2048, 'log', 'metric-detail')
@@ -120,14 +125,84 @@ class DashboardViewServiceTests {
         """);
     jdbcTemplate.update("""
         insert into t_vehicle_current_state
-        (vehicle_entity_id, vehicle_type, vehicle_name, total_distance, active, last_updated, source_file, source_log_hash)
-        values (99, 'EntityMotorcycle', 'vehicleMotorcycle', 42.0, true,
+        (vehicle_entity_id, vehicle_type, vehicle_name, owner_player_id, total_distance, active, last_updated, source_file, source_log_hash)
+        values (99, 'EntityMotorcycle', 'vehicleMotorcycle', 1, 42.0, true,
                 timestamp with time zone '2026-08-02 01:00:00+00:00', 'log', 'vehicle-detail')
         """);
 
     assertThat(dashboardViewService.serverDetail().history()).hasSize(1);
     assertThat(dashboardViewService.killDetail().recentKills()).hasSize(1);
     assertThat(dashboardViewService.vehicleDetail().vehicles()).hasSize(1);
+  }
+
+  @Test
+  void vehicleRankingAggregatesByOwnerAndTypeAndHidesUnownedNoise() {
+    jdbcTemplate.update("""
+        insert into m_player (id, player_key, platform, user_id, player_name)
+        values (1, 'EOS:eos-a', 'EOS', 'eos-a', 'PlayerA')
+        """);
+    jdbcTemplate.update("""
+        insert into t_vehicle_current_state
+        (vehicle_entity_id, vehicle_type, vehicle_name, owner_player_id, total_distance, active,
+         last_updated, source_file, source_log_hash)
+        values (10, 'EntityBicycle', '自転車', 1, 120.0, true, current_timestamp, 'log', 'bike-a'),
+               (11, 'EntityBicycle', '自転車', 1, 80.0, false, current_timestamp, 'log', 'bike-b'),
+               (12, 'EntityBicycle', '自転車', null, 9999.0, true, current_timestamp, 'log', 'bike-noise')
+        """);
+
+    DashboardViewService.VehicleDetailView detail = dashboardViewService.vehicleDetail();
+
+    assertThat(detail.vehicles()).hasSize(1);
+    assertThat(detail.vehicles().getFirst().ownerName()).isEqualTo("PlayerA");
+    assertThat(detail.vehicles().getFirst().vehicleCount()).isEqualTo(2);
+    assertThat(detail.vehicles().getFirst().totalDistance()).isEqualByComparingTo("200.0");
+  }
+
+  @Test
+  void explorationMarksPoiVisitedWhenPositionPassedWithinEightyMeters() {
+    jdbcTemplate.update("""
+        insert into m_world_poi
+        (source_path, source_hash, world_name, poi_name, category, x, y, z)
+        values ('world', 'poi-near', 'World', 'store_book_01', 'trader', 100, 30, 100),
+               ('world', 'poi-far', 'World', 'factory_01', 'industrial', 1000, 30, 1000)
+        """);
+    jdbcTemplate.update("""
+        insert into t_player_position_transaction
+        (occurred_at, player_name, player_entity_id, position_x, position_y, position_z,
+         position_source_type, source_event_hash, source_file)
+        values (current_timestamp, 'PlayerA', 1, 140, 30, 130, 'LP_COMMAND', 'poi-visit', 'telnet')
+        """);
+
+    DashboardViewService.ExplorationDetailView detail = dashboardViewService.explorationDetail();
+
+    assertThat(detail.totalCount()).isEqualTo(2);
+    assertThat(detail.exploredCount()).isEqualTo(1);
+    assertThat(detail.unexploredCount()).isEqualTo(1);
+    assertThat(detail.pois().getFirst().visitorName()).isEqualTo("PlayerA");
+  }
+
+  @Test
+  void killInsightsContainEnemyRankingDailyKillsAndXpGrowth() {
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    jdbcTemplate.update("""
+        insert into t_entity_kill_transaction
+        (occurred_at, player_name, player_entity_id, target_entity_type, target_entity_id,
+         source_file, source_log_hash)
+        values (?, 'PlayerA', 1, 'zombieBiker', 10, 'log', 'insight-kill-a'),
+               (?, 'PlayerB', 2, 'zombieBiker', 11, 'log', 'insight-kill-b')
+        """, now.minusHours(1), now.minusHours(2));
+    jdbcTemplate.update("""
+        insert into t_level_xp_summary_transaction
+        (occurred_at, player_name, player_entity_id, xp_from_loot, xp_from_harvesting,
+         xp_from_kill, xp_total, source_file, source_log_hash)
+        values (?, 'PlayerA', 1, 20, 30, 50, 100, 'log', 'insight-xp')
+        """, now.minusMinutes(30));
+
+    DashboardViewService.KillDetailView detail = dashboardViewService.killDetail();
+
+    assertThat(detail.defeatedEnemies().getFirst().defeatedCount()).isEqualTo(2);
+    assertThat(detail.dailyKills()).isNotEmpty();
+    assertThat(detail.growthTrends().getFirst().totalXp()).isEqualTo(100);
   }
 
   @Test
@@ -432,8 +507,7 @@ class DashboardViewServiceTests {
         .contains("AIR_DROP", "VEHICLE_LOADED");
     assertThat(dashboard.vehicleStatuses()).hasSize(1);
     assertThat(dashboard.vehicleStatuses().getFirst().ownerName()).isEqualTo("PlayerA");
-    assertThat(dashboard.vehicleStatuses().getFirst().ownerInferenceMethod())
-        .isEqualTo("nearest_fresh_player_position");
+    assertThat(dashboard.vehicleStatuses().getFirst().vehicleCount()).isEqualTo(1);
     assertThat(dashboard.vehicleStatuses().getFirst().totalDistance()).isEqualByComparingTo("20.0");
     assertThat(dashboard.playerStatuses()).hasSize(1);
     assertThat(dashboard.playerStatuses().getFirst().travelDistance()).isEqualByComparingTo("12.5");

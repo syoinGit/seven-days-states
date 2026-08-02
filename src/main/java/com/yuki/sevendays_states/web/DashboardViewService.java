@@ -576,30 +576,26 @@ public class DashboardViewService {
 
   private List<VehicleStatus> vehicleStatuses() {
     return jdbcTemplate.query("""
-        select v.vehicle_entity_id,
+        select min(v.vehicle_entity_id) as representative_id,
                coalesce(v.vehicle_name, v.vehicle_type) as vehicle_name,
                p.player_name as owner_name,
-               v.owner_inference_method,
-               v.position_x,
-               v.position_y,
-               v.position_z,
-               v.total_distance,
-               v.active,
-               v.last_updated
+               count(*) as vehicle_count,
+               sum(v.total_distance) as total_distance,
+               sum(case when v.active = true then 1 else 0 end) as active_count,
+               max(v.last_updated) as last_updated
         from t_vehicle_current_state v
-        left join m_player p on p.id = v.owner_player_id
-            or (v.owner_player_id is null
-                and v.owner_cross_platform_id is not null
+        join m_player p on p.id = v.owner_player_id
+            or (v.owner_player_id is null and v.owner_cross_platform_id is not null
                 and p.player_key = 'EOS:' || replace(v.owner_cross_platform_id, 'EOS_', ''))
-        order by v.total_distance desc, v.active desc, v.last_updated desc
+        group by p.id, p.player_name, coalesce(v.vehicle_name, v.vehicle_type)
+        order by total_distance desc, owner_name, vehicle_name
         """, (rs, rowNum) -> new VehicleStatus(
-        rs.getInt("vehicle_entity_id"),
+        rs.getInt("representative_id"),
         rs.getString("vehicle_name"),
-        displayPlayer(rs.getString("owner_name")),
-        rs.getString("owner_inference_method"),
-        coordinate(rs.getObject("position_x"), rs.getObject("position_y"), rs.getObject("position_z")),
+        rs.getString("owner_name"),
+        rs.getInt("vehicle_count"),
         rs.getBigDecimal("total_distance"),
-        booleanValue(rs, "active"),
+        rs.getInt("active_count") > 0,
         toDisplayTime(rs.getObject("last_updated"))));
   }
 
@@ -694,7 +690,58 @@ public class DashboardViewService {
         rs.getString("target_name"),
         coordinate(rs.getObject("player_position_x"), rs.getObject("player_position_y"),
             rs.getObject("player_position_z"))));
-    return new KillDetailView(adventureRankings(), recent, dailyActivity());
+    return new KillDetailView(
+        adventureRankings(),
+        recent,
+        dailyActivity(),
+        dailyKillActivity(),
+        defeatedEnemyRankings(),
+        growthTrends());
+  }
+
+  private List<DefeatedEnemyRanking> defeatedEnemyRankings() {
+    return jdbcTemplate.query("""
+        select k.target_entity_type,
+               coalesce((select tr.display_text from m_japanese_translation tr
+                         where tr.localization_key = k.target_entity_type limit 1),
+                        k.target_entity_type) as target_name,
+               count(*) as defeated_count,
+               count(distinct k.player_name) as hunter_count,
+               max(k.occurred_at) as last_defeated_at
+        from t_entity_kill_transaction k
+        group by k.target_entity_type
+        order by defeated_count desc, target_name
+        limit 12
+        """, (rs, rowNum) -> new DefeatedEnemyRanking(
+        rs.getString("target_name"),
+        rs.getLong("defeated_count"),
+        rs.getLong("hunter_count"),
+        toDisplayTime(rs.getObject("last_defeated_at"))));
+  }
+
+  private List<DailyActivity> dailyKillActivity() {
+    return dailyCounts("t_entity_kill_transaction");
+  }
+
+  private List<GrowthTrend> growthTrends() {
+    return jdbcTemplate.query("""
+        select coalesce(player_name, '誰か') as player_name,
+               sum(xp_total) as total_xp,
+               sum(xp_from_kill) as kill_xp,
+               sum(xp_from_loot) as loot_xp,
+               sum(xp_from_harvesting) as harvest_xp,
+               count(*) as reports
+        from t_level_xp_summary_transaction
+        group by coalesce(player_name, '誰か')
+        order by total_xp desc, player_name
+        limit 8
+        """, (rs, rowNum) -> new GrowthTrend(
+        rs.getString("player_name"),
+        rs.getLong("total_xp"),
+        rs.getLong("kill_xp"),
+        rs.getLong("loot_xp"),
+        rs.getLong("harvest_xp"),
+        rs.getLong("reports")));
   }
 
   private List<AdventureRanking> adventureRankings() {
@@ -777,8 +824,58 @@ public class DashboardViewService {
         .toList();
   }
 
+  private List<DailyActivity> dailyCounts(String tableName) {
+    if (!"t_entity_kill_transaction".equals(tableName)) {
+      throw new IllegalArgumentException("Unsupported activity table");
+    }
+    List<DailyActivityCount> counts = jdbcTemplate.query("""
+        select cast(occurred_at as date) as activity_day, count(*) as event_count
+        from t_entity_kill_transaction
+        where occurred_at >= ?
+        group by cast(occurred_at as date)
+        order by activity_day
+        """, (rs, rowNum) -> new DailyActivityCount(
+        rs.getObject("activity_day").toString(), rs.getLong("event_count")),
+        OffsetDateTime.now(ZoneOffset.UTC).minusDays(6).withHour(0).withMinute(0).withSecond(0).withNano(0));
+    long max = counts.stream().mapToLong(DailyActivityCount::eventCount).max().orElse(1);
+    return counts.stream()
+        .map(row -> new DailyActivity(row.day(), row.eventCount(), Math.max(4, row.eventCount() * 100 / max)))
+        .toList();
+  }
+
   public VehicleDetailView vehicleDetail() {
     return new VehicleDetailView(vehicleStatuses());
+  }
+
+  public ExplorationDetailView explorationDetail() {
+    List<PoiExploration> pois = jdbcTemplate.query("""
+        select poi.id, poi.poi_name, poi.category, poi.x, poi.y, poi.z,
+               case when exists (
+                 select 1 from t_player_position_transaction pos
+                 where ((pos.position_x - poi.x) * (pos.position_x - poi.x)
+                      + (pos.position_z - poi.z) * (pos.position_z - poi.z)) <= 6400
+               ) then true else false end as explored,
+               (select max(pos.occurred_at) from t_player_position_transaction pos
+                where ((pos.position_x - poi.x) * (pos.position_x - poi.x)
+                     + (pos.position_z - poi.z) * (pos.position_z - poi.z)) <= 6400) as visited_at,
+               (select pos.player_name from t_player_position_transaction pos
+                where ((pos.position_x - poi.x) * (pos.position_x - poi.x)
+                     + (pos.position_z - poi.z) * (pos.position_z - poi.z)) <= 6400
+                order by pos.occurred_at desc limit 1) as visitor_name
+        from m_world_poi poi
+        where coalesce(poi.category, '') <> 'part' and poi.poi_name not like 'part_%'
+        order by explored desc, visited_at desc nulls last, poi.poi_name
+        """, (rs, rowNum) -> new PoiExploration(
+        rs.getLong("id"),
+        displayPoi(rs.getString("poi_name")),
+        rs.getString("category"),
+        coordinate(rs.getObject("x"), rs.getObject("y"), rs.getObject("z")),
+        booleanValue(rs, "explored"),
+        toDisplayTime(rs.getObject("visited_at")),
+        rs.getString("visitor_name")));
+    long explored = pois.stream().filter(poi -> Boolean.TRUE.equals(poi.explored())).count();
+    long percentage = pois.isEmpty() ? 0 : explored * 100 / pois.size();
+    return new ExplorationDetailView(pois.size(), explored, pois.size() - explored, percentage, pois);
   }
 
   private ServerState latestServerState() {
@@ -990,8 +1087,7 @@ public class DashboardViewService {
       Integer vehicleEntityId,
       String vehicleName,
       String ownerName,
-      String ownerInferenceMethod,
-      String coordinate,
+      Integer vehicleCount,
       BigDecimal totalDistance,
       Boolean active,
       String lastUpdated
@@ -1007,8 +1103,19 @@ public class DashboardViewService {
   public record KillDetailView(
       List<AdventureRanking> rankings,
       List<KillEvent> recentKills,
-      List<DailyActivity> dailyActivity
+      List<DailyActivity> dailyActivity,
+      List<DailyActivity> dailyKills,
+      List<DefeatedEnemyRanking> defeatedEnemies,
+      List<GrowthTrend> growthTrends
   ) {
+  }
+
+  public record DefeatedEnemyRanking(
+      String targetName, long defeatedCount, long hunterCount, String lastDefeatedAt) {
+  }
+
+  public record GrowthTrend(
+      String playerName, long totalXp, long killXp, long lootXp, long harvestXp, long reports) {
   }
 
   public record AdventureRanking(
@@ -1032,6 +1139,16 @@ public class DashboardViewService {
   }
 
   public record VehicleDetailView(List<VehicleStatus> vehicles) {
+  }
+
+  public record PoiExploration(
+      Long poiId, String poiName, String category, String coordinate, Boolean explored,
+      String visitedAt, String visitorName) {
+  }
+
+  public record ExplorationDetailView(
+      long totalCount, long exploredCount, long unexploredCount, long percentage,
+      List<PoiExploration> pois) {
   }
 
   public record BloodMoonStatus(String occurredAt, String detailText) {
