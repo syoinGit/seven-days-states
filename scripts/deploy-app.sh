@@ -35,8 +35,19 @@ git pull --ff-only
 ./scripts/build-app.sh
 sudo systemctl restart "$SERVICE_NAME"
 
-if ! sudo systemctl is-active --quiet "$SERVICE_NAME"; then
-  sudo systemctl status "$SERVICE_NAME" --no-pager >&2
+for attempt in {1..30}; do
+  if curl --fail --silent --output /dev/null http://127.0.0.1:8082/; then
+    break
+  fi
+  if ! sudo systemctl is-active --quiet "$SERVICE_NAME"; then
+    sudo systemctl status "$SERVICE_NAME" --no-pager >&2
+    exit 1
+  fi
+  sleep 1
+done
+
+if ! curl --fail --silent --output /dev/null http://127.0.0.1:8082/; then
+  sudo journalctl -u "$SERVICE_NAME" -n 100 --no-pager >&2
   exit 1
 fi
 

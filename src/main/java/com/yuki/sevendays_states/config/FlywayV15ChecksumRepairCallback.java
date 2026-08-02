@@ -20,6 +20,8 @@ public class FlywayV15ChecksumRepairCallback implements Callback {
 
   static final int APPLIED_V15_CHECKSUM = -1037278684;
   static final int CURRENT_V15_CHECKSUM = -853613223;
+  static final String APPLIED_V15_DESCRIPTION = "backfill xp player from recent kills";
+  static final String CURRENT_V15_DESCRIPTION = "add dashboard query indexes";
 
   @Override
   public boolean supports(Event event, Context context) {
@@ -37,14 +39,18 @@ public class FlywayV15ChecksumRepairCallback implements Callback {
     if (!table.matches("[A-Za-z0-9_]+") || !tableExists(context, table)) {
       return;
     }
-    String sql = "update \"" + table
-        + "\" set \"checksum\" = ? where \"version\" = ? and \"checksum\" = ?";
+    String sql = "update \"" + table + "\" set \"checksum\" = ?, \"description\" = ? "
+        + "where \"version\" = ? and \"description\" = ? "
+        + "and \"checksum\" in (?, ?)";
     try (PreparedStatement statement = context.getConnection().prepareStatement(sql)) {
       statement.setInt(1, CURRENT_V15_CHECKSUM);
-      statement.setString(2, "15");
-      statement.setInt(3, APPLIED_V15_CHECKSUM);
+      statement.setString(2, CURRENT_V15_DESCRIPTION);
+      statement.setString(3, "15");
+      statement.setString(4, APPLIED_V15_DESCRIPTION);
+      statement.setInt(5, APPLIED_V15_CHECKSUM);
+      statement.setInt(6, CURRENT_V15_CHECKSUM);
       if (statement.executeUpdate() == 1) {
-        log.warn("Repaired the known Flyway V15 checksum mismatch");
+        log.warn("Repaired the known Flyway V15 checksum and description mismatch");
       }
     } catch (SQLException e) {
       throw new IllegalStateException("Failed to repair the known Flyway V15 checksum mismatch", e);
