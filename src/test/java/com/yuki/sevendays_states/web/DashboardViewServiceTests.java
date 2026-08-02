@@ -131,6 +131,71 @@ class DashboardViewServiceTests {
   }
 
   @Test
+  void adventureRankingCombinesKillsTravelAndCompletedPlaySessions() {
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    jdbcTemplate.update("""
+        insert into m_player (id, player_key, platform, user_id, player_name, last_seen_at)
+        values (1, 'EOS:eos-a', 'EOS', 'eos-a', 'PlayerA', ?)
+        """, Timestamp.from(now.toInstant()));
+    jdbcTemplate.update("""
+        insert into t_player_position_transaction
+        (occurred_at, player_name, player_entity_id, player_id, position_x, position_y, position_z,
+         position_source_type, inference_method, movement_distance, source_event_hash, source_file)
+        values (?, 'PlayerA', 101, 1, 0, 0, 0, 'LP_COMMAND', 'direct_telnet_lp', 250.0,
+                'ranking-position', 'telnet:lp')
+        """, now.minusMinutes(1));
+    jdbcTemplate.update("""
+        insert into t_entity_kill_transaction
+        (occurred_at, player_name, player_entity_id, player_id, target_entity_type, target_entity_id,
+         source_file, source_log_hash)
+        values (?, 'PlayerA', 101, 1, 'zombieA', 11, 'log', 'ranking-kill')
+        """, now.minusMinutes(2));
+    jdbcTemplate.update("""
+        insert into t_player_join_transaction
+        (occurred_at, player_name, player_entity_id, player_id, source_file, source_log_hash)
+        values (?, 'PlayerA', 101, 1, 'log', 'ranking-join')
+        """, now.minusMinutes(65));
+    jdbcTemplate.update("""
+        insert into t_player_leave_transaction
+        (occurred_at, player_name, player_entity_id, player_id, source_file, source_log_hash)
+        values (?, 'PlayerA', 101, 1, 'log', 'ranking-leave')
+        """, now.minusMinutes(5));
+
+    DashboardViewService.KillDetailView detail = dashboardViewService.killDetail();
+
+    assertThat(detail.rankings()).hasSize(1);
+    assertThat(detail.rankings().getFirst().kills()).isEqualTo(1);
+    assertThat(detail.rankings().getFirst().travelDistance()).isEqualByComparingTo("250.0");
+    assertThat(detail.rankings().getFirst().playMinutes()).isEqualTo(60);
+    assertThat(detail.dailyActivity()).isNotEmpty();
+  }
+
+  @Test
+  void playerStatusShowsNearbyOwnedVehicleAsCurrentRide() {
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    jdbcTemplate.update("""
+        insert into m_player (id, player_key, platform, user_id, player_name, last_seen_at)
+        values (1, 'EOS:eos-a', 'EOS', 'eos-a', 'PlayerA', ?)
+        """, Timestamp.from(now.toInstant()));
+    jdbcTemplate.update("""
+        insert into t_player_current_state
+        (player_entity_id, player_id, player_name, position_x, position_y, position_z, online, last_updated)
+        values (101, 1, 'PlayerA', 100, 30, 100, true, ?)
+        """, now.minusSeconds(5));
+    jdbcTemplate.update("""
+        insert into t_vehicle_current_state
+        (vehicle_entity_id, vehicle_type, vehicle_name, owner_player_id, position_x, position_y, position_z,
+         total_distance, active, last_updated, source_file, source_log_hash)
+        values (99, 'EntityMotorcycle', 'vehicleMotorcycle', 1, 104, 30, 100,
+                42.0, true, ?, 'log', 'nearby-current-vehicle')
+        """, now.minusSeconds(4));
+
+    DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
+
+    assertThat(dashboard.playerStatuses().getFirst().currentVehicle()).isEqualTo("vehicleMotorcycle");
+  }
+
+  @Test
   void playerStatusesShowOneRowForSameExternalPlayer() {
     jdbcTemplate.update("""
         insert into m_player (id, player_key, platform, user_id, native_platform, native_user_id, player_name, last_seen_at)
