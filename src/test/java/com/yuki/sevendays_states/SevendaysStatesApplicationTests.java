@@ -52,14 +52,19 @@ class SevendaysStatesApplicationTests {
   @Test
   void repairsKnownProductionV15ChecksumBeforeValidation() {
     jdbcTemplate.update(
-        "update \"flyway_schema_history\" set \"checksum\" = ? where \"version\" = '15'",
-        -1037278684);
+        "update \"flyway_schema_history\" set \"checksum\" = ?, \"description\" = ? "
+            + "where \"version\" = '15'",
+        -1037278684, "backfill xp player from recent kills");
 
     assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
     assertThat(jdbcTemplate.queryForObject(
         "select \"checksum\" from \"flyway_schema_history\" where \"version\" = '15'",
         Integer.class))
         .isEqualTo(-853613223);
+    assertThat(jdbcTemplate.queryForObject(
+        "select \"description\" from \"flyway_schema_history\" where \"version\" = '15'",
+        String.class))
+        .isEqualTo("add dashboard query indexes");
   }
 
   private boolean tableExists(String tableName) {
