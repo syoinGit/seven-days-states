@@ -42,7 +42,8 @@
 
     <ol class="feed">
       <li th:if="${#lists.isEmpty(dashboard.travelEntries)}" class="empty">まだ冒険記録がありません。</li>
-      <li class="feed-item" th:each="entry : ${dashboard.travelEntries}">
+      <li class="feed-item" th:each="entry : ${dashboard.travelEntries}"
+          th:classappend="${' tone-' + entry.tone}">
         <div class="feed-avatar" th:text="${#strings.substring(entry.actor, 0, 1)}">W</div>
         <div class="feed-body">
           <header>
@@ -50,7 +51,7 @@
             <span class="tag" th:text="${entry.kind}">EVENT</span>
             <time th:text="${entry.occurredAt ?: '-'}">time</time>
           </header>
-          <p th:text="${entry.message}">荒野で何かが起きた</p>
+          <p class="event-message" th:text="${entry.message}">荒野で何かが起きた</p>
           <footer th:if="${!#strings.isEmpty(entry.coordinate)}">
             <span>LOC</span><b th:text="${entry.coordinate}">0, 0, 0</b>
           </footer>

@@ -88,6 +88,7 @@ public class PoiNameService {
       Map.entry("corner", "角地"),
       Map.entry("straight", "直線"),
       Map.entry("intersection", "交差点"),
+      Map.entry("t", "T字路"),
       Map.entry("countryres", "郊外住宅地"),
       Map.entry("countryresidential", "郊外住宅地"),
       Map.entry("apartments", "集合住宅"),

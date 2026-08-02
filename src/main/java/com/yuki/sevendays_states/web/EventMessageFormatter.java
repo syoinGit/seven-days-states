@@ -38,7 +38,9 @@ public class EventMessageFormatter {
       if (detailText == null || detailText.isBlank()) {
         return safeActor + "が何かを討伐した！ 記録係は肝心なところで目をそらした。";
       }
-      return pattern(KILL_PATTERNS, kind, safeActor, detailText, poiName).formatted(safeActor, detailText);
+      return pattern(KILL_PATTERNS, kind, safeActor, detailText, poiName)
+          .formatted(safeActor, detailText)
+          .replaceFirst("！ ", "！\n");
     }
     if ("JOIN".equals(kind)) {
       if (poiName == null || poiName.isBlank()) {
@@ -48,6 +50,11 @@ public class EventMessageFormatter {
     }
     if ("LEAVE".equals(kind)) {
       return safeActor + "がログアウトした";
+    }
+    if ("MOVE".equals(kind)) {
+      String destination = poiName == null || poiName.isBlank() ? "荒野" : poiName;
+      String distance = detailText == null || detailText.isBlank() ? "" : detailText;
+      return safeActor + "が" + destination + "で" + distance + "移動！";
     }
     if ("SLEEPER_RESTORE".equals(kind)) {
       return "眠っていた敵が再配置された";
