@@ -466,6 +466,26 @@ public class DashboardViewService {
           from t_sleeper_transaction s
           where transaction_type <> 'SLEEPER_RESTORE'
           union all
+          select m.occurred_at,
+                 'MOVE' as kind,
+                 m.player_name,
+                 '移動した' as action_text,
+                 cast(round(m.movement_distance, 1) as varchar) || ' m ' as detail_text,
+                 (
+                   select poi.poi_name
+                   from m_world_poi poi
+                   where coalesce(poi.category, '') <> 'part'
+                     and poi.poi_name not like 'part_%'
+                   order by ((poi.x - m.position_x) * (poi.x - m.position_x)
+                         + (poi.z - m.position_z) * (poi.z - m.position_z))
+                   limit 1
+                 ) as poi_name,
+                 m.position_x as x,
+                 m.position_y as y,
+                 m.position_z as z
+          from t_player_position_transaction m
+          where m.movement_distance >= 1
+          union all
           select occurred_at,
                  'XP' as kind,
                  player_name,
@@ -541,6 +561,7 @@ public class DashboardViewService {
         """, (rs, rowNum) -> new TravelEntry(
         toDisplayTime(rs.getObject("occurred_at")),
         rs.getString("kind"),
+        eventTone(rs.getString("kind")),
         displayPlayer(rs.getString("player_name")),
         rs.getString("action_text"),
         rs.getString("detail_text"),
@@ -572,6 +593,21 @@ public class DashboardViewService {
       }
     }
     return List.copyOf(condensed);
+  }
+
+  private String eventTone(String kind) {
+    if (kind == null) {
+      return "neutral";
+    }
+    return switch (kind) {
+      case "JOIN" -> "login";
+      case "LEAVE" -> "logout";
+      case "KILL" -> "combat";
+      case "MOVE", "VEHICLE_LOADED", "VEHICLE_POST_INIT", "VEHICLE_REMOVED" -> "movement";
+      case "SLEEPER_SPAWN", "WANDERING_HORDE", "SCOUT_HORDE", "SCREAMER_SPAWN" -> "warning";
+      case "XP" -> "exploration";
+      default -> "neutral";
+    };
   }
 
   private List<VehicleStatus> vehicleStatuses() {
@@ -635,6 +671,7 @@ public class DashboardViewService {
         """, (rs, rowNum) -> new TravelEntry(
         toDisplayTime(rs.getObject("occurred_at")),
         rs.getString("kind"),
+        eventTone(rs.getString("kind")),
         displayPlayer(rs.getString("player_name")),
         rs.getString("action_text"),
         rs.getString("detail_text"),
@@ -1078,6 +1115,7 @@ public class DashboardViewService {
   public record TravelEntry(
       String occurredAt,
       String kind,
+      String tone,
       String actor,
       String actionText,
       String detailText,

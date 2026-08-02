@@ -377,6 +377,8 @@ class DashboardViewServiceTests {
     assertThat(poiNameService.displayName("house_old_bungalow_02")).isEqualTo("旧式の平屋住宅");
     assertThat(poiNameService.displayName("rwg_tile_rural_corner_01"))
         .isEqualTo("道路生成 区画 農村 角地");
+    assertThat(poiNameService.displayName("rwg_tile_gateway_t_01"))
+        .isEqualTo("道路生成 区画 入口 T字路");
     assertThat(poiNameService.displayCategory("rwg")).isEqualTo("道路区画");
     assertThat(poiNameService.displayCategory("cemetery")).isEqualTo("墓地");
   }

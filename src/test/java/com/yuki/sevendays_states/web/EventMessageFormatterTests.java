@@ -19,10 +19,17 @@ class EventMessageFormatterTests {
 
       assertThat(message).contains("DDD烈火王テムジン");
       assertThat(message).contains("ゾンビ" + i);
+      assertThat(message).contains("！\n");
       messages.add(message.replace("ゾンビ" + i, "ゾンビ"));
     }
 
     assertThat(messages).hasSizeGreaterThanOrEqualTo(8);
+  }
+
+  @Test
+  void movementMessageContainsDestinationAndDistance() {
+    assertThat(formatter.format("MOVE", "PlayerA", "移動した", "42.5 m ", "軍事基地"))
+        .isEqualTo("PlayerAが軍事基地で42.5 m 移動！");
   }
 
   @Test
