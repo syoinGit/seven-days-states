@@ -11,7 +11,7 @@
 <header class="topbar">
   <a class="brand" th:href="@{/}">
     <span class="brand-mark">WP</span>
-    <span><b>WATCHPOINT</b><small>WASTELAND OBSERVATION NETWORK</small></span>
+    <span><b>WATCHPOINT</b><small>WASTELAND ADVENTURE ARCHIVE</small></span>
   </a>
   <div class="top-status">
     <span class="live-pulse"></span>
@@ -21,19 +21,21 @@
 
 <main class="app-shell">
   <nav class="rail" aria-label="main navigation">
-    <p class="rail-label">CONTROL</p>
-    <a class="active" th:href="@{/}"><span>01</span>観測ログ</a>
-    <a th:href="@{/server}"><span>02</span>サーバー</a>
-    <a th:href="@{/kills}"><span>03</span>討伐記録</a>
-    <a th:href="@{/vehicles}"><span>04</span>乗り物</a>
-    <p class="rail-copy">収集したログで、<br>この世界をさらに楽しむ。</p>
+    <div class="rail-top">
+      <p class="rail-label">ADVENTURE RECORD</p>
+      <a class="active" th:href="@{/}"><span>01</span>冒険タイムライン</a>
+      <a th:href="@{/kills}"><span>02</span>冒険者ランキング</a>
+      <a th:href="@{/vehicles}"><span>03</span>乗り物ランキング</a>
+      <p class="rail-copy">荒廃世界を生きた一日を、<br>記録からもう一度楽しむ。</p>
+    </div>
+    <a class="server-nav" th:href="@{/server}"><span>SYS</span>サーバー情報</a>
   </nav>
 
   <section class="feed-column">
     <header class="feed-header">
       <div>
-        <p class="eyebrow">LIVE OBSERVATION</p>
-        <h1>荒野で起きていること</h1>
+        <p class="eyebrow">LIVE ADVENTURE</p>
+        <h1>現在の冒険記録</h1>
       </div>
       <span>60 SEC / PLAYER</span>
     </header>
@@ -47,7 +49,7 @@
     </section>
 
     <ol class="feed">
-      <li th:if="${#lists.isEmpty(dashboard.travelEntries)}" class="empty">まだ観測ログがありません。</li>
+      <li th:if="${#lists.isEmpty(dashboard.travelEntries)}" class="empty">まだ冒険記録がありません。</li>
       <li class="feed-item" th:each="entry : ${dashboard.travelEntries}">
         <div class="feed-avatar" th:text="${#strings.substring(entry.actor, 0, 1)}">W</div>
         <div class="feed-body">
@@ -67,8 +69,8 @@
 
   <aside class="status-sidebar">
     <section class="side-module blood-alert">
-      <p class="module-code">ALERT / BLOOD MOON</p>
-      <h2>次回襲撃警戒</h2>
+      <p class="module-code">WORLD DAY / BLOOD MOON</p>
+      <h2>次回の血月</h2>
       <strong th:text="${dashboard.bloodMoon.detailText}">予定情報なし</strong>
       <small th:text="${dashboard.bloodMoon.occurredAt ?: '未観測'}">未観測</small>
     </section>
@@ -78,13 +80,17 @@
         <div><p class="module-code">PILOT STATUS</p><h2>プレイヤー</h2></div>
         <b th:text="${dashboard.serverState.playerCount}">0</b>
       </div>
-      <div class="pilot-list">
+      <div class="pilot-list live-party">
         <a class="pilot" th:each="player : ${dashboard.playerStatuses}"
            th:href="@{/players/{id}(id=${player.playerId})}">
           <span class="status-dot" th:classappend="${player.online == false} ? ' offline'"></span>
           <span class="pilot-info">
             <strong th:text="${player.playerName}">player</strong>
-            <small th:text="${player.online == false ? 'OFFLINE' : player.poiName}">OFFLINE</small>
+            <small th:text="${player.online == false ? 'OFFLINE' : player.poiName + ' を探索中'}">OFFLINE</small>
+            <small class="pilot-vitals" th:if="${player.online}">
+              <span th:text="${player.health != null ? 'HP ' + player.health : 'HP --'}">HP --</span>
+              <span th:if="${player.currentVehicle != null}" th:text="${' / ' + player.currentVehicle + 'で移動中'}">vehicle</span>
+            </small>
           </span>
           <b th:text="${player.level != null ? 'LV.' + player.level : '--'}">--</b>
         </a>
@@ -93,7 +99,7 @@
     </section>
 
     <a class="side-module server-summary" th:href="@{/server}">
-      <p class="module-code">SYSTEM VITALS</p>
+      <p class="module-code">SERVER INFORMATION</p>
       <div><span>FPS</span><b th:text="${dashboard.serverState.fps ?: '-'}">-</b></div>
       <div><span>LAST SIGNAL</span><b th:text="${dashboard.serverState.occurredAt ?: '-'}">-</b></div>
       <small>詳細ステータスを見る →</small>

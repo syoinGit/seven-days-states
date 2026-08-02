@@ -22,6 +22,8 @@ WATCHPOINT turns collected server logs into a mechanical, wasteland-themed activ
 - Tracks travel distance for each vehicle and player, including vehicle distance attributed to its owner.
 - Condenses the main activity feed to at most one player event per minute and moves blood moon alerts to the sidebar.
 - Provides dedicated player, server telemetry, combat, and vehicle pages.
+- Builds adventure rankings from kills, travel distance, vehicle distance, and completed login sessions.
+- Aggregates seven days of activity for charts and future AI-generated daily adventure journals.
 - Identifies players by stable external IDs, preferring EOS ID, then Steam ID.
 - Displays event timestamps in JST (`Asia/Tokyo`) as `yyyy-MM-dd HH:mm:ss`.
 

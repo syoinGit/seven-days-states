@@ -93,7 +93,17 @@ a { color: inherit; }
   min-height: calc(100vh - 70px);
 }
 
-.rail { padding: 30px 22px; border-right: 1px solid var(--steel); }
+.rail {
+  position: sticky;
+  top: 70px;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 70px);
+  padding: 30px 22px;
+  border-right: 1px solid var(--steel);
+}
+.rail-top { flex: 1; }
+.server-nav { margin-top: auto !important; border-top: 1px solid var(--steel); }
 .rail-label, .module-code, .eyebrow { margin: 0; color: var(--signal); font-size: 9px; font-weight: 900; letter-spacing: .19em; }
 .rail a { display: flex; gap: 12px; margin: 5px 0; padding: 12px 10px; color: var(--muted); font-size: 13px; font-weight: 700; text-decoration: none; }
 .rail a span { color: #596264; font-size: 9px; }
@@ -144,6 +154,7 @@ a { color: inherit; }
 .pilot-info strong, .pilot-info small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pilot-info strong { font-size: 12px; }
 .pilot-info small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.pilot-info .pilot-vitals { color: #bfc3bd; font-family: monospace; }
 .pilot > b { color: var(--muted); font-family: monospace; font-size: 10px; }
 .server-summary div { display: flex; justify-content: space-between; margin-top: 12px; }
 .server-summary div span { color: var(--muted); font-size: 9px; }
@@ -153,6 +164,9 @@ a { color: inherit; }
 .layout { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 30px 0 60px; }
 .detail-page { display: grid; gap: 20px; }
 .page-title { padding: 28px 0 18px; border-bottom: 1px solid var(--steel); }
+.breadcrumbs { display: flex; gap: 9px; align-items: center; margin-bottom: 22px; color: var(--muted); font-size: 10px; }
+.breadcrumbs a { color: var(--signal); text-decoration: none; }
+.breadcrumbs b { color: var(--text); font-weight: 600; }
 .page-title h1 { font-size: clamp(27px, 4vw, 42px); }
 .page-title > p:last-child { max-width: 700px; margin: 10px 0 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
 .nav-button { padding: 9px 13px; border: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 700; text-decoration: none; }
@@ -189,11 +203,28 @@ th { color: var(--signal); font-size: 9px; letter-spacing: .08em; }
 .combat-log div b { color: var(--danger); }
 .combat-log div small { margin-left: auto; color: var(--cyan); font-family: monospace; font-size: 9px; }
 
+.ranking-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.ranking-card { display: grid; grid-template-columns: auto minmax(120px, 1fr) minmax(220px, 1.5fr); gap: 15px; align-items: center; padding: 18px; border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); }
+.ranking-card .rank { color: var(--signal); font-family: monospace; font-size: 22px; font-weight: 900; }
+.rank-name small, .rank-name a { display: block; }
+.rank-name small { color: var(--muted); font-size: 8px; letter-spacing: .1em; }
+.rank-name a { margin-top: 5px; font-size: 14px; font-weight: 800; text-decoration: none; overflow-wrap: anywhere; }
+.rank-name a:hover { color: var(--signal); }
+.ranking-card dl { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; margin: 0; }
+.ranking-card dd { font-family: monospace; }
+.activity-chart { display: flex; gap: 14px; align-items: end; min-height: 230px; padding: 24px; }
+.activity-day { display: grid; grid-template-rows: 18px 140px 18px; gap: 7px; min-width: 42px; flex: 1; text-align: center; }
+.activity-day > span { color: var(--text); font-family: monospace; font-size: 10px; }
+.activity-day > div { position: relative; display: flex; align-items: end; border-bottom: 1px solid var(--line); background: repeating-linear-gradient(0deg, transparent 0 27px, rgb(255 255 255 / 4%) 27px 28px); }
+.activity-day i { display: block; width: 100%; min-height: 4px; background: linear-gradient(var(--signal), #73551d); box-shadow: 0 0 18px rgb(214 164 59 / 18%); }
+.activity-day small { color: var(--muted); font-family: monospace; font-size: 8px; white-space: nowrap; }
+
 .vehicle-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .vehicle-card { padding: 17px; }
 .vehicle-card.inactive { opacity: .62; }
 .vehicle-card > header { display: flex; justify-content: space-between; color: var(--good); font-family: monospace; font-size: 9px; }
 .vehicle-card.inactive > header { color: var(--danger); }
+.vehicle-rank { margin-right: 7px; color: var(--signal); font-size: 14px; }
 .vehicle-card h2 { margin: 16px 0; font-size: 17px; overflow-wrap: anywhere; }
 .vehicle-card dl, .player-card dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }
 dt { color: var(--signal); font-size: 8px; letter-spacing: .11em; }
@@ -225,7 +256,10 @@ dd { margin: 4px 0 0; color: #c4c7c1; font-size: 11px; overflow-wrap: anywhere; 
 @media (max-width: 820px) {
   .app-shell { display: block; }
   .rail { display: flex; gap: 4px; overflow-x: auto; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--steel); }
+  .rail { position: static; flex-direction: row; height: auto; }
+  .rail-top { display: flex; }
   .rail-label, .rail-copy { display: none; }
+  .server-nav { margin-top: 0 !important; border-top: 0; }
   .rail a { flex: 0 0 auto; margin: 0; }
   .feed-column { border-right: 0; }
   .status-sidebar { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -233,6 +267,7 @@ dd { margin: 4px 0 0; color: #c4c7c1; font-size: 11px; overflow-wrap: anywhere; 
   .status-sidebar .side-module:nth-child(2) { grid-row: span 2; }
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
   .detail-grid, .main-grid { grid-template-columns: 1fr; }
+  .ranking-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 580px) {
@@ -246,6 +281,9 @@ dd { margin: 4px 0 0; color: #c4c7c1; font-size: 11px; overflow-wrap: anywhere; 
   .status-sidebar .side-module:nth-child(2) { grid-row: auto; }
   .layout { width: min(100% - 22px, 1180px); padding-top: 16px; }
   .metric-grid, .leader-grid, .vehicle-grid { grid-template-columns: 1fr; }
+  .ranking-card { grid-template-columns: auto 1fr; }
+  .ranking-card dl { grid-column: 1 / -1; }
+  .activity-chart { gap: 6px; padding: 15px 8px; }
   .combat-log li, .timeline li { grid-template-columns: 1fr; gap: 7px; }
   .combat-log div small { width: 100%; margin: 5px 0 0; }
   .player-card dl { grid-template-columns: 1fr; }
