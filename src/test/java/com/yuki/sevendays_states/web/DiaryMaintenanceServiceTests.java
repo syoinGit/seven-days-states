@@ -99,7 +99,9 @@ class DiaryMaintenanceServiceTests {
         "PlayerA", "討伐1", "位置移動125.5m", "SLEEPER_SPAWNは戦闘数や一斉出現数ではなく",
         "開始地点", "終了地点", "討伐XP: 50", "採取XP: 30", "探索・物資XP: 20",
         "Blood Moonまであと1日",
-        "現在のログには建築専用XPがない");
+        "現在のログには建築専用XPがない", "最も印象的な出来事を一つ選び",
+        "訪問POIを一覧として説明しない", "プレイヤー間に順位や優劣を付けない",
+        "事実の根拠として使う", "締め方は毎回変える");
     assertThat(service.days()).extracting(DiaryMaintenanceService.DiaryDay::date).contains(date);
   }
 }
