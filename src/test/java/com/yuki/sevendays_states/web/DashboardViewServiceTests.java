@@ -113,6 +113,46 @@ class DashboardViewServiceTests {
   }
 
   @Test
+  void bloodMoonCountdownWarnsWhenBloodMoonIsToday() {
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    jdbcTemplate.update("""
+        insert into t_world_time_observation
+        (observed_at, game_day, game_hour, game_minute, source, source_hash, raw_response)
+        values (?, 21, 18, 30, 'telnet:gettime', 'blood-time-today', 'Day 21, 18:30')
+        """, now);
+    jdbcTemplate.update("""
+        insert into t_world_event_transaction
+        (occurred_at, event_type, detail_text, source_file, source_log_hash, raw_line)
+        values (?, 'BLOOD_MOON', 'Day 21 / 周期 7', 'log', 'blood-today', 'raw')
+        """, now.minusMinutes(1));
+
+    DashboardViewService.BloodMoonStatus bloodMoon = dashboardViewService.dashboard().bloodMoon();
+
+    assertThat(bloodMoon.countdownText()).isEqualTo("本日");
+    assertThat(bloodMoon.alertLevel()).isEqualTo("today");
+  }
+
+  @Test
+  void bloodMoonCountdownShowsRemainingGameDays() {
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    jdbcTemplate.update("""
+        insert into t_world_time_observation
+        (observed_at, game_day, game_hour, game_minute, source, source_hash, raw_response)
+        values (?, 18, 9, 0, 'telnet:gettime', 'blood-time-future', 'Day 18, 09:00')
+        """, now);
+    jdbcTemplate.update("""
+        insert into t_world_event_transaction
+        (occurred_at, event_type, detail_text, source_file, source_log_hash, raw_line)
+        values (?, 'BLOOD_MOON', 'Day 21 / 周期 7', 'log', 'blood-future', 'raw')
+        """, now.minusMinutes(1));
+
+    DashboardViewService.BloodMoonStatus bloodMoon = dashboardViewService.dashboard().bloodMoon();
+
+    assertThat(bloodMoon.countdownText()).isEqualTo("あと3日");
+    assertThat(bloodMoon.alertLevel()).isEqualTo("normal");
+  }
+
+  @Test
   void dashboardCondensesPlayerEventsToOnePerMinute() {
     jdbcTemplate.update("""
         insert into t_entity_kill_transaction

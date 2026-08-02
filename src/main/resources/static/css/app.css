@@ -168,6 +168,11 @@ a { color: inherit; }
 .world-clock span { color: var(--signal); font-size: 12px; letter-spacing: .1em; }
 .world-clock b { color: var(--text); font-size: 23px; }
 .blood-alert > strong { display: block; margin-top: 15px; font-size: 13px; }
+.blood-countdown { display: inline-block; margin-top: 10px; padding: 5px 9px; border: 1px solid var(--danger); color: var(--danger); font-family: monospace; font-size: 15px; letter-spacing: .08em; }
+.blood-alert-tomorrow .blood-countdown { border-color: var(--signal); color: var(--signal); }
+.blood-alert-today { border-color: var(--danger); background: linear-gradient(135deg, rgb(199 78 60 / 22%), var(--panel) 68%); animation: blood-alert-pulse 2.2s ease-in-out infinite; }
+.blood-alert-today .blood-countdown { background: var(--danger); color: #fff; }
+@keyframes blood-alert-pulse { 50% { box-shadow: 0 0 24px rgb(199 78 60 / 28%); } }
 .blood-alert > small { display: block; margin-top: 9px; color: var(--muted); font-size: 10px; }
 .module-head { display: flex; justify-content: space-between; align-items: center; }
 .module-head > b { color: var(--signal); font-size: 22px; }
