@@ -17,6 +17,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,8 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class DashboardViewService {
+
+  private static final Pattern BLOOD_MOON_DAY = Pattern.compile("(?i)\\bDay\\s+(\\d+)\\b");
 
   private final JdbcTemplate jdbcTemplate;
   private final SevenDaysDataProperties properties;
@@ -36,13 +40,14 @@ public class DashboardViewService {
     List<TravelEntry> travelEntries = travelEntries();
     List<VehicleStatus> vehicleStatuses = vehicleStatuses();
     ServerState serverState = withOnlinePlayerCount(latestServerState());
+    WorldTimeStatus worldTime = latestWorldTime();
     return new DashboardView(
         playerStatuses,
         travelEntries,
         vehicleStatuses,
         serverState,
-        latestWorldTime(),
-        latestBloodMoon(),
+        worldTime,
+        latestBloodMoon(worldTime),
         aiComment(playerStatuses, travelEntries, vehicleStatuses, serverState));
   }
 
@@ -1043,16 +1048,36 @@ public class DashboardViewService {
     return new ServerDetailView(current, players, history);
   }
 
-  private BloodMoonStatus latestBloodMoon() {
-    List<BloodMoonStatus> rows = jdbcTemplate.query("""
+  private BloodMoonStatus latestBloodMoon(WorldTimeStatus worldTime) {
+    List<BloodMoonObservation> rows = jdbcTemplate.query("""
         select occurred_at, detail_text
         from t_world_event_transaction
         where event_type = 'BLOOD_MOON'
         order by occurred_at desc
         limit 1
-        """, (rs, rowNum) -> new BloodMoonStatus(
+        """, (rs, rowNum) -> new BloodMoonObservation(
         toDisplayTime(rs.getObject("occurred_at")), rs.getString("detail_text")));
-    return rows.isEmpty() ? new BloodMoonStatus("", "予定情報なし") : rows.getFirst();
+    if (rows.isEmpty()) {
+      return new BloodMoonStatus("", "予定情報なし", "血月情報を待機中", "unknown");
+    }
+    BloodMoonObservation observation = rows.getFirst();
+    Matcher matcher = BLOOD_MOON_DAY.matcher(observation.detailText());
+    if (worldTime.day() == null || !matcher.find()) {
+      return new BloodMoonStatus(
+          observation.occurredAt(), observation.detailText(), "現在DAYを観測中", "unknown");
+    }
+    int remainingDays = Integer.parseInt(matcher.group(1)) - worldTime.day();
+    String countdown = switch (remainingDays) {
+      case 0 -> "本日";
+      case 1 -> "明日";
+      default -> remainingDays > 1 ? "あと" + remainingDays + "日" : "予定更新待ち";
+    };
+    String alertLevel = remainingDays == 0 ? "today" : remainingDays == 1 ? "tomorrow" : "normal";
+    return new BloodMoonStatus(
+        observation.occurredAt(), observation.detailText(), countdown, alertLevel);
+  }
+
+  private record BloodMoonObservation(String occurredAt, String detailText) {
   }
 
   private WorldTimeStatus latestWorldTime() {
@@ -1281,7 +1306,8 @@ public class DashboardViewService {
       List<PoiExploration> pois) {
   }
 
-  public record BloodMoonStatus(String occurredAt, String detailText) {
+  public record BloodMoonStatus(
+      String occurredAt, String detailText, String countdownText, String alertLevel) {
   }
 
   public record ServerMetricPoint(
