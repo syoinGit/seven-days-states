@@ -41,6 +41,7 @@ public class DashboardViewService {
         travelEntries,
         vehicleStatuses,
         serverState,
+        latestWorldTime(),
         latestBloodMoon(),
         aiComment(playerStatuses, travelEntries, vehicleStatuses, serverState));
   }
@@ -513,6 +514,22 @@ public class DashboardViewService {
                  null as z
           from t_level_xp_summary_transaction
           union all
+          select observed_at as occurred_at,
+                 'DAY_START' as kind,
+                 'WATCHPOINT' as player_name,
+                 '新しい一日を観測した' as action_text,
+                 'DAY ' || game_day as detail_text,
+                 null as poi_name,
+                 null as x,
+                 null as y,
+                 null as z
+          from (
+            select observed_at, game_day,
+                   row_number() over (partition by game_day order by observed_at) as day_rank
+            from t_world_time_observation
+          ) world_day
+          where day_rank = 1
+          union all
           select w.occurred_at,
                  w.event_type as kind,
                  w.actor_player_name as player_name,
@@ -522,6 +539,7 @@ public class DashboardViewService {
                    when 'SCOUT_HORDE' then 'スクリーマーの気配がした'
                    when 'SCREAMER_SPAWN' then 'スクリーマーが出現した'
                    when 'BLOOD_MOON' then 'ブラッドムーン予定が更新された'
+                   when 'PLAYER_DEATH' then '力尽きた'
                    else 'イベントが発生した'
                  end as action_text,
                  w.detail_text,
@@ -655,10 +673,10 @@ public class DashboardViewService {
     return switch (kind) {
       case "JOIN" -> "login";
       case "LEAVE" -> "logout";
-      case "KILL" -> "combat";
+      case "KILL", "PLAYER_DEATH" -> "combat";
       case "VEHICLE_MOVE", "VEHICLE_LOADED", "VEHICLE_POST_INIT", "VEHICLE_REMOVED" -> "movement";
       case "SLEEPER_SPAWN", "WANDERING_HORDE", "SCOUT_HORDE", "SCREAMER_SPAWN" -> "warning";
-      case "XP" -> "exploration";
+      case "XP", "DAY_START" -> "exploration";
       default -> "neutral";
     };
   }
@@ -1037,6 +1055,19 @@ public class DashboardViewService {
     return rows.isEmpty() ? new BloodMoonStatus("", "予定情報なし") : rows.getFirst();
   }
 
+  private WorldTimeStatus latestWorldTime() {
+    List<WorldTimeStatus> rows = jdbcTemplate.query("""
+        select observed_at, game_day, game_hour, game_minute
+        from t_world_time_observation
+        order by observed_at desc
+        limit 1
+        """, (rs, rowNum) -> new WorldTimeStatus(
+        toDisplayTime(rs.getObject("observed_at")),
+        rs.getInt("game_day"),
+        String.format("%02d:%02d", rs.getInt("game_hour"), rs.getInt("game_minute"))));
+    return rows.isEmpty() ? new WorldTimeStatus("", null, "--:--") : rows.getFirst();
+  }
+
   private AiComment aiComment(
       List<PlayerStatus> playerStatuses,
       List<TravelEntry> travelEntries,
@@ -1122,12 +1153,16 @@ public class DashboardViewService {
       List<TravelEntry> travelEntries,
       List<VehicleStatus> vehicleStatuses,
       ServerState serverState,
+      WorldTimeStatus worldTime,
       BloodMoonStatus bloodMoon,
       AiComment aiComment
   ) {
   }
 
   public record AiComment(String title, String body) {
+  }
+
+  public record WorldTimeStatus(String observedAt, Integer day, String time) {
   }
 
   public record PlayerStatus(

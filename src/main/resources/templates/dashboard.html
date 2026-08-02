@@ -63,6 +63,10 @@
   <aside class="status-sidebar">
     <section class="side-module blood-alert">
       <p class="module-code">WORLD DAY / BLOOD MOON</p>
+      <div class="world-clock">
+        <span th:text="${dashboard.worldTime.day != null ? 'DAY ' + dashboard.worldTime.day : 'DAY --'}">DAY --</span>
+        <b th:text="${dashboard.worldTime.time}">--:--</b>
+      </div>
       <h2>次回の血月</h2>
       <strong th:text="${dashboard.bloodMoon.detailText}">予定情報なし</strong>
       <small th:text="${dashboard.bloodMoon.occurredAt ?: '未観測'}">未観測</small>

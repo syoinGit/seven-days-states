@@ -31,6 +31,7 @@ import com.yuki.sevendays_states.log.parser.GameLogLineParser;
 import com.yuki.sevendays_states.log.parser.LevelXpSummaryLogParser;
 import com.yuki.sevendays_states.log.parser.PlayerJoinLogParser;
 import com.yuki.sevendays_states.log.parser.PlayerLeaveLogParser;
+import com.yuki.sevendays_states.log.parser.PlayerDeathLogParser;
 import com.yuki.sevendays_states.log.parser.PlayerListPositionLogParser;
 import com.yuki.sevendays_states.log.parser.ServerMetricLogParser;
 import com.yuki.sevendays_states.log.parser.SleeperRestoreLogParser;
@@ -106,6 +107,7 @@ public class GameLogImportService {
   private final GameLogLineParser lineParser = new GameLogLineParser();
   private final PlayerJoinLogParser playerJoinParser = new PlayerJoinLogParser(lineParser);
   private final PlayerLeaveLogParser playerLeaveParser = new PlayerLeaveLogParser(lineParser);
+  private final PlayerDeathLogParser playerDeathParser = new PlayerDeathLogParser(lineParser);
   private final EntityKillLogParser entityKillParser = new EntityKillLogParser(lineParser);
   private final LevelXpSummaryLogParser levelXpSummaryParser = new LevelXpSummaryLogParser(lineParser);
   private final PlayerListPositionLogParser playerListPositionParser = new PlayerListPositionLogParser(lineParser);
@@ -226,6 +228,11 @@ public class GameLogImportService {
     Optional<EntityKillLogEvent> kill = entityKillParser.parse(line);
     if (kill.isPresent()) {
       saveEntityKill(sourceFile, kill.get(), counter);
+      return;
+    }
+    Optional<WorldEventLogEvent> playerDeath = playerDeathParser.parse(line);
+    if (playerDeath.isPresent()) {
+      saveWorldEvent(sourceFile, playerDeath.get(), counter);
       return;
     }
     Optional<SleeperLogEvent> sleeperSpawn = sleeperSpawnParser.parse(line);
@@ -790,6 +797,9 @@ public class GameLogImportService {
             row.setActorPlayerEntityId(player.playerEntityId());
             row.setPlayerId(player.playerId());
           });
+    } else if (event.actorPlayerName() != null) {
+      playerRepository.findFirstByPlayerNameOrderByLastSeenAtDesc(event.actorPlayerName())
+          .ifPresent(player -> row.setPlayerId(player.getId()));
     }
     row.setDetailText(event.detailText());
     row.setPositionX(event.positionX());

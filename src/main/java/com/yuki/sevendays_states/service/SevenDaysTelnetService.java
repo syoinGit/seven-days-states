@@ -1,18 +1,26 @@
 package com.yuki.sevendays_states.service;
 
 import com.yuki.sevendays_states.config.SevenDaysDataProperties;
+import com.yuki.sevendays_states.entity.T_WorldTimeObservation;
+import com.yuki.sevendays_states.repository.T_WorldTimeObservationRepository;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.net.telnet.TelnetClient;
@@ -24,12 +32,16 @@ import org.springframework.stereotype.Service;
 public class SevenDaysTelnetService {
 
   private static final DateTimeFormatter LOG_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+  private static final Pattern WORLD_TIME = Pattern.compile("^Day\\s+(?<day>\\d+)\\s*,?\\s*(?<hour>\\d{1,2}):(?<minute>\\d{2})$");
 
   private final SevenDaysDataProperties properties;
   private final GameLogImportService logImportService;
+  private final T_WorldTimeObservationRepository worldTimeRepository;
 
   public GameLogImportResult fetchPlayerList() {
-    List<String> lines = executeLpCommand();
+    TelnetSnapshot snapshot = executeSnapshotCommands();
+    List<String> lines = snapshot.lpLines();
+    snapshot.worldTime().ifPresent(this::saveWorldTime);
     if (lines.isEmpty()) {
       log.info("7DTD telnet lp returned no readable lines.");
       return new GameLogImportResult(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -38,8 +50,9 @@ public class SevenDaysTelnetService {
     return logImportService.importLogLines("telnet:lp", lines);
   }
 
-  private List<String> executeLpCommand() {
+  private TelnetSnapshot executeSnapshotCommands() {
     List<String> lines = new ArrayList<>();
+    WorldTime worldTime = null;
     LocalDateTime commandTime = LocalDateTime.now(ZoneOffset.UTC);
     TelnetClient telnet = new TelnetClient();
     telnet.setConnectTimeout(properties.telnet().readTimeoutMs());
@@ -74,7 +87,15 @@ public class SevenDaysTelnetService {
         if (commandOutputStarted) {
           lines.add(normalizeCommandLine(line, commandTime));
         }
-        if (commandOutputStarted && line.startsWith("Total of ") && line.endsWith(" in the game")) {
+        if (commandOutputStarted && isTotalLine(line)) {
+          break;
+        }
+      }
+
+      writeTelnetCommand(writer, "gettime");
+      while ((line = reader.readLine()) != null) {
+        worldTime = parseWorldTime(line, commandTime).orElse(null);
+        if (worldTime != null) {
           break;
         }
       }
@@ -87,7 +108,7 @@ public class SevenDaysTelnetService {
       }
     } catch (Exception e) {
       log.warn("7DTD telnet lp command failed. host={}, port={}", properties.telnet().host(), properties.telnet().port(), e);
-      return List.of();
+      return new TelnetSnapshot(List.of(), Optional.empty());
     } finally {
       try {
         telnet.disconnect();
@@ -95,7 +116,52 @@ public class SevenDaysTelnetService {
         log.debug("7DTD telnet disconnect failed.", e);
       }
     }
-    return lines;
+    return new TelnetSnapshot(List.copyOf(lines), Optional.ofNullable(worldTime));
+  }
+
+  static Optional<WorldTime> parseWorldTime(String rawLine, LocalDateTime commandTime) {
+    String line = rawLine == null ? "" : rawLine.strip();
+    int marker = line.lastIndexOf("Day ");
+    if (marker >= 0) {
+      line = line.substring(marker);
+    }
+    Matcher matcher = WORLD_TIME.matcher(line);
+    if (!matcher.matches()) {
+      return Optional.empty();
+    }
+    int day = Integer.parseInt(matcher.group("day"));
+    int hour = Integer.parseInt(matcher.group("hour"));
+    int minute = Integer.parseInt(matcher.group("minute"));
+    if (day < 1 || hour > 23 || minute > 59) {
+      return Optional.empty();
+    }
+    return Optional.of(new WorldTime(
+        commandTime.atOffset(ZoneOffset.UTC), day, hour, minute, line));
+  }
+
+  private void saveWorldTime(WorldTime worldTime) {
+    String hash = sha256("telnet:gettime|" + worldTime.observedAt() + "|" + worldTime.rawResponse());
+    if (worldTimeRepository.existsBySourceHash(hash)) {
+      return;
+    }
+    T_WorldTimeObservation observation = new T_WorldTimeObservation();
+    observation.setObservedAt(worldTime.observedAt());
+    observation.setGameDay(worldTime.day());
+    observation.setGameHour(worldTime.hour());
+    observation.setGameMinute(worldTime.minute());
+    observation.setSource("telnet:gettime");
+    observation.setSourceHash(hash);
+    observation.setRawResponse(worldTime.rawResponse());
+    worldTimeRepository.save(observation);
+  }
+
+  private String sha256(String value) {
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+    } catch (Exception e) {
+      throw new IllegalStateException("SHA-256 cannot be calculated", e);
+    }
   }
 
   private void drainPrompt(BufferedReader reader) {
@@ -160,5 +226,11 @@ public class SevenDaysTelnetService {
 
   private static boolean isTotalLine(String line) {
     return line.startsWith("Total of ") && line.endsWith(" in the game");
+  }
+
+  private record TelnetSnapshot(List<String> lpLines, Optional<WorldTime> worldTime) {
+  }
+
+  record WorldTime(OffsetDateTime observedAt, int day, int hour, int minute, String rawResponse) {
   }
 }

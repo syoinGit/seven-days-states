@@ -34,6 +34,16 @@ public class EventMessageFormatter {
 
   public String format(String kind, String actor, String actionText, String detailText, String poiName) {
     String safeActor = actor == null || actor.isBlank() ? "誰か" : actor;
+    if ("DAY_START".equals(kind)) {
+      String day = detailText == null || detailText.isBlank() ? "新しい一日" : detailText;
+      return day + "が始まった。荒野の冒険記録を更新する。";
+    }
+    if ("PLAYER_DEATH".equals(kind)) {
+      if (detailText == null || detailText.isBlank() || safeActor.equals(detailText)) {
+        return safeActor + "が荒野で力尽きた。装備回収までが冒険です。";
+      }
+      return safeActor + "が" + detailText + "に倒された。荒野は容赦がない。";
+    }
     if ("KILL".equals(kind)) {
       if (detailText == null || detailText.isBlank()) {
         return safeActor + "が何かを討伐した！ 記録係は肝心なところで目をそらした。";
