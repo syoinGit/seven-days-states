@@ -33,6 +33,14 @@ class EventMessageFormatterTests {
   }
 
   @Test
+  void killAndSleeperMessagesIncludePoiWhenKnown() {
+    assertThat(formatter.format("KILL", "PlayerA", "討伐した", "看護師", "病院"))
+        .startsWith("PlayerAが病院で看護師");
+    assertThat(formatter.format("SLEEPER_SPAWN", "PlayerA", "起こした", "看護師", "病院"))
+        .startsWith("病院で、PlayerA");
+  }
+
+  @Test
   void sleeperSpawnMessagesKeepPlayerAndEnemyWhileUsingVariations() {
     Set<String> messages = new HashSet<>();
 

@@ -348,7 +348,7 @@ class GameLogImportServiceTests {
   }
 
   @Test
-  void doesNotAssignSleeperWhenMultipleActivePlayersAreTooCloseToInfer() throws Exception {
+  void assignsSleeperToDeterministicNearestPlayerWhenPlayersAreEquidistant() throws Exception {
     Path log = writeLog("""
         2026-07-26T08:00:00 1000.000 INF PlayerSpawnedInWorld (reason: JoinMultiplayer, position: 0, 50, 0): EntityID=101, PltfmId='Steam_a', CrossId='EOS_a', OwnerID='Steam_a', PlayerName='PlayerA', ClientNumber='1'
         2026-07-26T08:00:10 1010.000 INF PlayerSpawnedInWorld (reason: JoinMultiplayer, position: 20, 50, 0): EntityID=202, PltfmId='Steam_b', CrossId='EOS_b', OwnerID='Steam_b', PlayerName='PlayerB', ClientNumber='2'
@@ -359,7 +359,7 @@ class GameLogImportServiceTests {
 
     assertThat(sleeperRepository.findAll())
         .extracting(row -> row.getEntityClass() + ":" + row.getPlayerName())
-        .containsExactly("zombieBoe:null");
+        .containsExactly("zombieBoe:PlayerA");
     assertThat(playerPositionRepository.findAll())
         .extracting(row -> row.getPositionSourceType() + ":" + row.getPlayerName())
         .containsExactly(

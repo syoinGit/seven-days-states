@@ -4,6 +4,7 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -187,6 +188,39 @@ class DashboardViewServiceTests {
         .doesNotContain("MOVE");
     assertThat(dashboard.travelEntries().getFirst().message())
         .contains("オートバイに乗って42.5 m移動");
+  }
+
+  @Test
+  void timelineGroupsSimultaneousSleepersPerNearestPlayer() {
+    OffsetDateTime occurredAt = OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(1);
+    jdbcTemplate.update("""
+        insert into t_player_position_transaction
+        (occurred_at, player_name, player_entity_id, position_x, position_y, position_z,
+         position_source_type, source_event_hash, source_file)
+        values (?, 'PlayerA', 101, 0, 40, 0, 'LP_COMMAND', 'group-player-a', 'telnet'),
+               (?, 'PlayerB', 202, 500, 40, 500, 'LP_COMMAND', 'group-player-b', 'telnet')
+        """, occurredAt, occurredAt);
+    jdbcTemplate.update("""
+        insert into t_sleeper_transaction
+        (occurred_at, transaction_type, sleeper_volume_x, sleeper_volume_y, sleeper_volume_z,
+         position_x, position_y, position_z, entity_class, entity_count, source_file, source_log_hash)
+        values (?, 'SLEEPER_SPAWN', 0, 40, 0, 5, 40, 5, 'zombieNurse', 1, 'log', 'group-a1'),
+               (?, 'SLEEPER_SPAWN', 0, 40, 0, 6, 40, 5, 'zombieBoe', 1, 'log', 'group-a2'),
+               (?, 'SLEEPER_SPAWN', 0, 40, 0, 5, 40, 6, 'zombieMoe', 1, 'log', 'group-a3'),
+               (?, 'SLEEPER_SPAWN', 0, 40, 0, 6, 40, 6, 'zombieJoe', 1, 'log', 'group-a4'),
+               (?, 'SLEEPER_SPAWN', 500, 40, 500, 505, 40, 505, 'zombieNurse', 1, 'log', 'group-b1'),
+               (?, 'SLEEPER_SPAWN', 500, 40, 500, 506, 40, 505, 'zombieBoe', 1, 'log', 'group-b2')
+        """, occurredAt, occurredAt, occurredAt, occurredAt, occurredAt, occurredAt);
+
+    List<DashboardViewService.TravelEntry> sleepers = dashboardViewService.dashboard().travelEntries().stream()
+        .filter(entry -> "SLEEPER_SPAWN".equals(entry.kind()))
+        .toList();
+
+    assertThat(sleepers).hasSize(2);
+    assertThat(sleepers).extracting(DashboardViewService.TravelEntry::actor)
+        .containsExactlyInAnyOrder("PlayerA", "PlayerB");
+    assertThat(sleepers).filteredOn(entry -> "PlayerA".equals(entry.actor())).singleElement()
+        .satisfies(entry -> assertThat(entry.message()).contains("大量の敵（4体）"));
   }
 
   @Test

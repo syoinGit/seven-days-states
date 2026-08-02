@@ -38,9 +38,15 @@ public class EventMessageFormatter {
       if (detailText == null || detailText.isBlank()) {
         return safeActor + "が何かを討伐した！ 記録係は肝心なところで目をそらした。";
       }
-      return pattern(KILL_PATTERNS, kind, safeActor, detailText, poiName)
+      String message = pattern(KILL_PATTERNS, kind, safeActor, detailText, poiName)
           .formatted(safeActor, detailText)
           .replaceFirst("！ ", "！\n");
+      if (poiName != null && !poiName.isBlank()) {
+        message = message.replaceFirst(
+            java.util.regex.Pattern.quote(safeActor + "が"),
+            java.util.regex.Matcher.quoteReplacement(safeActor + "が" + poiName + "で"));
+      }
+      return message;
     }
     if ("JOIN".equals(kind)) {
       if (poiName == null || poiName.isBlank()) {
@@ -62,7 +68,9 @@ public class EventMessageFormatter {
       return "眠っていた敵が再配置された";
     }
     if ("SLEEPER_SPAWN".equals(kind) && detailText != null && !detailText.isBlank()) {
-      return pattern(ENCOUNTER_PATTERNS, kind, safeActor, detailText, poiName).formatted(safeActor, detailText);
+      String message = pattern(ENCOUNTER_PATTERNS, kind, safeActor, detailText, poiName)
+          .formatted(safeActor, detailText);
+      return poiName == null || poiName.isBlank() ? message : poiName + "で、" + message;
     }
     if ("AIR_DROP".equals(kind)) {
       return poiName == null || poiName.isBlank()
