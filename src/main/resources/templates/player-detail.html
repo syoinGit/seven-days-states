@@ -13,7 +13,7 @@
   <a class="nav-button" th:href="@{/}">冒険タイムラインへ戻る</a>
 </header>
 
-<main class="layout detail-page">
+<main class="detail-shell"><nav th:replace="~{fragments/navigation :: rail('player')}"></nav><section class="layout detail-page">
   <header class="page-title">
     <nav class="breadcrumbs"><a th:href="@{/}"><span aria-hidden="true">⌂</span> 冒険記録</a><span>›</span><b><span aria-hidden="true">♙</span> プレイヤー</b></nav>
     <p class="eyebrow">PLAYER / PERSONAL RECORD</p>
@@ -110,6 +110,6 @@
       </article>
     </aside>
   </section>
-</main>
+</section></main>
 </body>
 </html>

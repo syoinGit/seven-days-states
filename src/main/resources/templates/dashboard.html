@@ -20,17 +20,7 @@
 </header>
 
 <main class="app-shell">
-  <nav class="rail" aria-label="main navigation">
-    <div class="rail-top">
-      <p class="rail-label">ADVENTURE RECORD</p>
-      <a class="active" th:href="@{/}"><span>01</span>冒険タイムライン</a>
-      <a th:href="@{/kills}"><span>02</span>冒険者ランキング</a>
-      <a th:href="@{/vehicles}"><span>03</span>乗り物ランキング</a>
-      <a th:href="@{/exploration}"><span>04</span>探索マップ</a>
-      <p class="rail-copy">荒廃世界を生きた一日を、<br>記録からもう一度楽しむ。</p>
-    </div>
-    <a class="server-nav" th:href="@{/server}"><span>SYS</span>サーバー情報</a>
-  </nav>
+  <nav th:replace="~{fragments/navigation :: rail('timeline')}"></nav>
 
   <section class="feed-column">
     <header class="feed-header">
