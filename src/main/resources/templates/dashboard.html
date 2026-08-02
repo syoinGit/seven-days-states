@@ -26,6 +26,7 @@
       <a class="active" th:href="@{/}"><span>01</span>冒険タイムライン</a>
       <a th:href="@{/kills}"><span>02</span>冒険者ランキング</a>
       <a th:href="@{/vehicles}"><span>03</span>乗り物ランキング</a>
+      <a th:href="@{/exploration}"><span>04</span>探索マップ</a>
       <p class="rail-copy">荒廃世界を生きた一日を、<br>記録からもう一度楽しむ。</p>
     </div>
     <a class="server-nav" th:href="@{/server}"><span>SYS</span>サーバー情報</a>
@@ -34,6 +35,7 @@
   <section class="feed-column">
     <header class="feed-header">
       <div>
+        <nav class="breadcrumbs compact"><a th:href="@{/}"><span aria-hidden="true">⌂</span> ホーム</a><span>›</span><b><span aria-hidden="true">⌁</span> タイムライン</b></nav>
         <p class="eyebrow">LIVE ADVENTURE</p>
         <h1>現在の冒険記録</h1>
       </div>
@@ -86,10 +88,11 @@
           <span class="status-dot" th:classappend="${player.online == false} ? ' offline'"></span>
           <span class="pilot-info">
             <strong th:text="${player.playerName}">player</strong>
-            <small th:text="${player.online == false ? 'OFFLINE' : player.poiName + ' を探索中'}">OFFLINE</small>
-            <small class="pilot-vitals" th:if="${player.online}">
+            <small th:text="${player.online == false ? '最終地点：' + player.poiName : player.poiName + ' を探索中'}">探索中</small>
+            <small class="pilot-vitals">
               <span th:text="${player.health != null ? 'HP ' + player.health : 'HP --'}">HP --</span>
-              <span th:if="${player.currentVehicle != null}" th:text="${' / ' + player.currentVehicle + 'で移動中'}">vehicle</span>
+              <span th:if="${player.online and player.currentVehicle != null}" th:text="${' / ' + player.currentVehicle + 'で移動中'}">vehicle</span>
+              <span th:if="${player.online == false}"> / OFFLINE</span>
             </small>
           </span>
           <b th:text="${player.level != null ? 'LV.' + player.level : '--'}">--</b>

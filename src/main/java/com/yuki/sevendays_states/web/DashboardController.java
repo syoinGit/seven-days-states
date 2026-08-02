@@ -45,4 +45,10 @@ public class DashboardController {
     model.addAttribute("vehicles", dashboardViewService.vehicleDetail());
     return "vehicle-detail";
   }
+
+  @GetMapping("/exploration")
+  public String exploration(Model model) {
+    model.addAttribute("exploration", dashboardViewService.explorationDetail());
+    return "exploration-detail";
+  }
 }
