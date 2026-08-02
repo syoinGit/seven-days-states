@@ -178,6 +178,7 @@ class DashboardViewServiceTests {
     assertThat(detail.totalCount()).isEqualTo(2);
     assertThat(detail.exploredCount()).isEqualTo(1);
     assertThat(detail.unexploredCount()).isEqualTo(1);
+    assertThat(detail.pois()).hasSize(1).allMatch(DashboardViewService.PoiExploration::explored);
     assertThat(detail.pois().getFirst().visitorName()).isEqualTo("PlayerA");
   }
 
@@ -367,6 +368,17 @@ class DashboardViewServiceTests {
   void poiFallbackUsesJapaneseWordsForKnownPoiTokens() {
     assertThat(poiNameService.displayName("countrytown_business_01"))
         .isEqualTo("田舎町 事務所");
+  }
+
+  @Test
+  void poiNamesAndCategoriesAreLocalizedForExplorationDisplay() {
+    assertThat(poiNameService.displayName("base_military_01")).isEqualTo("軍事基地");
+    assertThat(poiNameService.displayName("base_survivor_01")).isEqualTo("生存者基地");
+    assertThat(poiNameService.displayName("house_old_bungalow_02")).isEqualTo("旧式の平屋住宅");
+    assertThat(poiNameService.displayName("rwg_tile_rural_corner_01"))
+        .isEqualTo("道路生成 区画 農村 角地");
+    assertThat(poiNameService.displayCategory("rwg")).isEqualTo("道路区画");
+    assertThat(poiNameService.displayCategory("cemetery")).isEqualTo("墓地");
   }
 
   @Test

@@ -868,14 +868,18 @@ public class DashboardViewService {
         """, (rs, rowNum) -> new PoiExploration(
         rs.getLong("id"),
         displayPoi(rs.getString("poi_name")),
-        rs.getString("category"),
+        poiNameService.displayCategory(rs.getString("category")),
         coordinate(rs.getObject("x"), rs.getObject("y"), rs.getObject("z")),
         booleanValue(rs, "explored"),
         toDisplayTime(rs.getObject("visited_at")),
         rs.getString("visitor_name")));
     long explored = pois.stream().filter(poi -> Boolean.TRUE.equals(poi.explored())).count();
     long percentage = pois.isEmpty() ? 0 : explored * 100 / pois.size();
-    return new ExplorationDetailView(pois.size(), explored, pois.size() - explored, percentage, pois);
+    List<PoiExploration> discoveredPois = pois.stream()
+        .filter(poi -> Boolean.TRUE.equals(poi.explored()))
+        .toList();
+    return new ExplorationDetailView(
+        pois.size(), explored, pois.size() - explored, percentage, discoveredPois);
   }
 
   private ServerState latestServerState() {
