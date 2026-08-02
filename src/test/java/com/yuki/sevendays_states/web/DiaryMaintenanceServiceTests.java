@@ -92,12 +92,13 @@ class DiaryMaintenanceServiceTests {
       assertThat(player.positionDistance()).isEqualByComparingTo("125.5");
       assertThat(player.startPlace()).contains("病院");
       assertThat(player.endPlace()).contains("農場");
-      assertThat(player.xp().total()).isEqualTo(100);
     });
+    assertThat(packet.xp().total()).isEqualTo(100);
     assertThat(packet.bloodMoon().status()).contains("あと1日");
     assertThat(packet.generationData()).contains(
         "PlayerA", "討伐1", "位置移動125.5m", "SLEEPER_SPAWNは戦闘数や一斉出現数ではなく",
-        "開始地点", "終了地点", "XP合計100", "Blood Moonまであと1日",
+        "開始地点", "終了地点", "討伐XP: 50", "採取XP: 30", "探索・物資XP: 20",
+        "Blood Moonまであと1日",
         "現在のログには建築専用XPがない");
     assertThat(service.days()).extracting(DiaryMaintenanceService.DiaryDay::date).contains(date);
   }

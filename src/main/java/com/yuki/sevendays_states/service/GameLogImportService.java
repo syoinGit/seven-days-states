@@ -60,9 +60,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.ArrayDeque;
 import java.util.Comparator;
-import java.util.Deque;
 import java.util.HexFormat;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -229,7 +227,7 @@ public class GameLogImportService {
     }
     Optional<EntityKillLogEvent> kill = entityKillParser.parse(line);
     if (kill.isPresent()) {
-      saveEntityKill(sourceFile, kill.get(), context, counter);
+      saveEntityKill(sourceFile, kill.get(), counter);
       return;
     }
     Optional<WorldEventLogEvent> playerDeath = playerDeathParser.parse(line);
@@ -330,8 +328,7 @@ public class GameLogImportService {
     counter.playerLeaves++;
   }
 
-  private void saveEntityKill(
-      String sourceFile, EntityKillLogEvent event, LogImportContext context, Counter counter) {
+  private void saveEntityKill(String sourceFile, EntityKillLogEvent event, Counter counter) {
     String hash = lineHash(sourceFile, event.occurredAt().toString(), event.rawLine());
     if (entityKillRepository.existsBySourceLogHash(hash)) {
       return;
@@ -353,8 +350,6 @@ public class GameLogImportService {
     row.setSourceFile(sourceFile);
     row.setSourceLogHash(hash);
     entityKillRepository.save(row);
-    context.playerActivityObserved(
-        event.playerName(), event.playerEntityId(), row.getPlayerId(), event.occurredAt());
     counter.entityKills++;
   }
 
@@ -373,12 +368,6 @@ public class GameLogImportService {
     row.setXpFromHarvesting(event.xpFromHarvesting());
     row.setXpFromKill(event.xpFromKill());
     row.setXpTotal(event.xpTotal());
-    context.inferXpPlayer(event.occurredAt()).ifPresent(player -> {
-      row.setPlayerName(player.playerName());
-      row.setPlayerEntityId(player.playerEntityId());
-      row.setPlayerId(player.playerId());
-      row.setPlayerInferenceMethod(player.inferenceMethod());
-    });
     row.setSourceFile(sourceFile);
     row.setSourceLogHash(hash);
     levelXpSummaryRepository.save(row);
@@ -1153,7 +1142,6 @@ public class GameLogImportService {
 
   private static class LogImportContext {
     private final Map<Integer, ActivePlayer> activePlayers = new HashMap<>();
-    private final Deque<RecentPlayerActivity> recentPlayerActivities = new ArrayDeque<>();
 
     private void playerJoined(PlayerJoinLogEvent event, Long playerId) {
       activePlayers.put(event.playerEntityId(), new ActivePlayer(
@@ -1195,28 +1183,6 @@ public class GameLogImportService {
         return Optional.empty();
       }
       return activePlayers.values().stream().findFirst();
-    }
-
-    private void playerActivityObserved(
-        String playerName, int playerEntityId, Long playerId, OffsetDateTime occurredAt) {
-      recentPlayerActivities.addLast(new RecentPlayerActivity(
-          playerName, playerEntityId, playerId, occurredAt, "recent_kill_before_xp"));
-      while (recentPlayerActivities.size() > 20) {
-        recentPlayerActivities.removeFirst();
-      }
-    }
-
-    private Optional<RecentPlayerActivity> inferXpPlayer(OffsetDateTime occurredAt) {
-      while (!recentPlayerActivities.isEmpty()
-          && recentPlayerActivities.getFirst().occurredAt().isBefore(occurredAt.minusSeconds(5))) {
-        recentPlayerActivities.removeFirst();
-      }
-      if (!recentPlayerActivities.isEmpty()) {
-        return Optional.of(recentPlayerActivities.removeLast());
-      }
-      return inferSingleActivePlayer().map(player -> new RecentPlayerActivity(
-          player.playerName(), player.playerEntityId(), player.playerId(), occurredAt,
-          "single_active_player_session"));
     }
 
     private Optional<ActivePlayer> inferNearestActivePlayer(int x, int z) {
@@ -1288,11 +1254,6 @@ public class GameLogImportService {
           trustedForPositionUpdate,
           OffsetDateTime.now());
     }
-  }
-
-  private record RecentPlayerActivity(
-      String playerName, int playerEntityId, Long playerId,
-      OffsetDateTime occurredAt, String inferenceMethod) {
   }
 
   private record ActivePlayerDistance(ActivePlayer player, double distance) {

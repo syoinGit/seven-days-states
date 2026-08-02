@@ -337,8 +337,17 @@ th { color: var(--signal); font-size: 9px; letter-spacing: .08em; }
 .growth-chart { margin-top: 16px; }
 .growth-chart svg { display: block; width: 100%; height: 100px; overflow: visible; background: repeating-linear-gradient(0deg, transparent 0 24px, rgb(255 255 255 / 4%) 24px 25px); }
 .growth-chart line { stroke: var(--line); stroke-width: 1; }
-.growth-chart polyline { fill: none; stroke: var(--good); stroke-width: 2.5; vector-effect: non-scaling-stroke; filter: drop-shadow(0 0 4px rgb(133 169 105 / 45%)); }
+.growth-chart polyline { fill: none; stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.growth-chart polyline.xp-kill, .growth-legend .xp-kill i { stroke: var(--danger); background: var(--danger); }
+.growth-chart polyline.xp-harvest, .growth-legend .xp-harvest i { stroke: var(--good); background: var(--good); }
+.growth-chart polyline.xp-loot, .growth-legend .xp-loot i { stroke: var(--cyan); background: var(--cyan); }
 .growth-chart > small { display: flex; justify-content: space-between; margin-top: 4px; color: var(--muted); font-family: monospace; font-size: 8px; }
+.global-growth { padding: 20px; }
+.global-growth .growth-chart svg { height: 220px; }
+.growth-legend { display: flex; flex-wrap: wrap; gap: 14px 28px; margin-top: 18px; }
+.growth-legend span { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; }
+.growth-legend i { width: 18px; height: 3px; }
+.growth-legend b { color: var(--text); font-family: monospace; }
 .growth-grid dl { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 16px 0 0; }
 
 .exploration-progress { height: 4px; background: #1a2021; }

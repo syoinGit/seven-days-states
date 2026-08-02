@@ -346,9 +346,10 @@ class DashboardViewServiceTests {
 
     assertThat(detail.defeatedEnemies().getFirst().defeatedCount()).isEqualTo(2);
     assertThat(detail.dailyKills()).isNotEmpty();
-    assertThat(detail.growthTrends().getFirst().totalXp()).isEqualTo(100);
-    assertThat(detail.growthTrends().getFirst().playerName()).isEqualTo("PlayerA");
-    assertThat(detail.growthTrends().getFirst().chartPoints()).isNotBlank();
+    assertThat(detail.growthTrend().killXp()).isEqualTo(50);
+    assertThat(detail.growthTrend().harvestXp()).isEqualTo(30);
+    assertThat(detail.growthTrend().lootXp()).isEqualTo(20);
+    assertThat(detail.growthTrend().killChartPoints()).isNotBlank();
   }
 
   @Test

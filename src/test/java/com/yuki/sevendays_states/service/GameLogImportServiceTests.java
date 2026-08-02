@@ -287,7 +287,7 @@ class GameLogImportServiceTests {
   }
 
   @Test
-  void infersSingleActivePlayerForLevelXpSummary() throws Exception {
+  void doesNotInferPlayerForLevelXpSummary() throws Exception {
     Path log = writeLog("""
         2026-07-26T08:18:02 1147.256 INF PlayerSpawnedInWorld (reason: JoinMultiplayer, position: -162, 52, -857): EntityID=331, PltfmId='Steam_76561198123350583', CrossId='EOS_xxx', OwnerID='Steam_xxx', PlayerName='DDD烈火王テムジン', ClientNumber='3'
         2026-07-26T08:36:07 2233.109 INF MinEventLogMessage: XP gained during the last level:
@@ -300,7 +300,7 @@ class GameLogImportServiceTests {
 
     assertThat(levelXpSummaryRepository.findAll())
         .extracting(row -> row.getPlayerName() + ":" + row.getPlayerEntityId() + ":" + row.getPlayerInferenceMethod() + ":" + row.getXpTotal())
-        .containsExactly("DDD烈火王テムジン:331:single_active_player_session:4980");
+        .containsExactly("null:null:null:4980");
   }
 
   @Test
