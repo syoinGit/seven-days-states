@@ -1,4 +1,4 @@
-# Running
+# Running and deployment
 
 ## Environment
 
@@ -8,7 +8,33 @@ Copy `.env.example` to `.env` and set real values.
 cp .env.example .env
 ```
 
-`docker compose` reads `.env` automatically.
+`.env.example` is the tracked EC2 template. `.env` contains host-specific values
+and secrets and must never be committed.
+
+For local development, change these values in `.env`:
+
+```dotenv
+APP_ENVIRONMENT=local
+SEVEN_DAYS_LOG_SOURCE=file
+SEVEN_DAYS_ROOT=7dtd
+SEVEN_DAYS_DOCKER_LOG_ENABLED=false
+SEVEN_DAYS_TELNET_ENABLED=false
+```
+
+For EC2, keep the production paths from `.env.example`. The repository directory
+and the 7DTD server directory are intentionally separate:
+
+```text
+/home/ec2-user/seven-days-stats  # application Git repository
+/home/ec2-user/7dtd              # live 7DTD server data
+```
+
+Copy the Compose template only for a new environment. Do not replace an existing
+EC2 `compose.yml` until its PostgreSQL volume mapping has been compared.
+
+```bash
+cp compose.example.yml compose.yml
+```
 
 The Spring Boot app does not automatically load `.env`, so export it before starting the app:
 
@@ -26,16 +52,16 @@ For EC2/systemd, set the same values through an `EnvironmentFile` or service env
 The production directory is expected to be:
 
 ```text
-/home/ec2-user/sevendays-states
+/home/ec2-user/seven-days-stats
 ├── .env
-├── 7dtd
 ├── app
-│   └── sevendays-states.jar
+│   └── app.jar
 ├── compose.yml
-├── nginx
-├── postgres
 └── scripts
 ```
+
+Live 7DTD files remain under `/home/ec2-user/7dtd` and are not part of this
+repository.
 
 Build and place the jar under `app/`:
 
@@ -43,24 +69,28 @@ Build and place the jar under `app/`:
 ./scripts/build-app.sh
 ```
 
-Run the jar from the project root so relative paths such as `SEVENDAYS_ROOT=7dtd` resolve correctly:
+Run the jar from the project root so relative paths such as `SEVEN_DAYS_ROOT=7dtd` resolve correctly:
 
 ```bash
 ./scripts/run-app.sh
 ```
 
-Production `.env` example:
+Deploy the latest `main` branch, build the jar, and restart systemd:
 
 ```bash
-POSTGRES_PASSWORD=...
-SEVENDAYS_ENVIRONMENT=production
-SEVENDAYS_MODE=docker
-SEVENDAYS_ROOT=7dtd
-SEVENDAYS_DOCKER_CONTAINER_NAME=7dtd
-SEVENDAYS_DOCKER_LOG_SINCE=5m
-SEVENDAYS_LOG_SCHEDULED_ENABLED=false
-SEVENDAYS_TELNET_SCHEDULED_ENABLED=true
-SEVENDAYS_TELNET_HOST=localhost
-SEVENDAYS_TELNET_PORT=8081
-SEVEN_DAYS_TO_DIE_TELNET_PASSWORD=...
+cd /home/ec2-user/seven-days-stats
+./scripts/deploy-app.sh
+```
+
+The deployment script detects both `seven-days-stats.service` and the legacy
+`sevendays-states.service`. To select a unit explicitly, run:
+
+```bash
+SERVICE_NAME=sevendays-states.service ./scripts/deploy-app.sh
+```
+
+Inspect production logs with:
+
+```bash
+sudo journalctl -u seven-days-stats.service -n 100 --no-pager
 ```

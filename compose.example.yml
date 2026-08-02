@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: seven-days-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: seven_days_stats
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

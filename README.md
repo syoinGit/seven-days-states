@@ -1,4 +1,4 @@
-# sevendays-states
+# seven-days-stats
 
 7 Days to Die dedicated server logs and save data dashboard.
 
@@ -36,7 +36,8 @@ The application imports server data from `players.xml`, Docker logs, and Telnet 
 │   ├── static/                  # CSS/images
 │   └── templates/               # Thymeleaf templates
 ├── src/test/java/               # Tests
-├── 7dtd/config/                 # Local 7DTD config files
+├── 7dtd/                        # Local-only 7DTD test data (Git-ignored)
+├── compose.example.yml          # PostgreSQL Compose template
 ├── .env.example
 └── pom.xml
 ```
@@ -55,19 +56,11 @@ Important variables:
 
 ```bash
 POSTGRES_PASSWORD=
-APP_ENVIRONMENT=production
-SEVEN_DAYS_LOG_SOURCE=docker
-SEVEN_DAYS_ROOT=/home/ec2-user/7dtd
-SEVEN_DAYS_DATA_DIRECTORY=/home/ec2-user/7dtd/data
-SEVEN_DAYS_GAME_DIRECTORY=/home/ec2-user/7dtd/game
-SEVEN_DAYS_CONTAINER_NAME=7dtd
-SEVEN_DAYS_DOCKER_LOG_SINCE=5m
-SEVEN_DAYS_TELNET_ENABLED=true
-SEVEN_DAYS_TELNET_HOST=127.0.0.1
-SEVEN_DAYS_TELNET_PORT=8081
-SEVEN_DAYS_TELNET_PASSWORD=
-SEVEN_DAYS_LOG_SERVER_METRIC_INTERVAL_MINUTES=60
-SEVEN_DAYS_CURRENT_STATE_MAX_AGE_SECONDS=120
+APP_ENVIRONMENT=local
+SEVEN_DAYS_LOG_SOURCE=file
+SEVEN_DAYS_ROOT=7dtd
+SEVEN_DAYS_DOCKER_LOG_ENABLED=false
+SEVEN_DAYS_TELNET_ENABLED=false
 ```
 
 Spring Boot does not automatically load `.env` when started directly, so export it before local execution.
@@ -119,37 +112,13 @@ set +a
 java -jar app/app.jar
 ```
 
-The application must be started from the project root so relative paths such as `SEVENDAYS_ROOT=7dtd` resolve correctly.
+The application must be started from the project root so relative paths such as `SEVEN_DAYS_ROOT=7dtd` resolve correctly.
 
-## Production Layout
+## Production
 
-The intended EC2 layout is:
-
-```text
-/home/ec2-user/sevendays-states
-├── .env
-├── 7dtd
-├── app
-│   └── app.jar
-├── scripts
-└── src / pom.xml / ...
-```
-
-The systemd service should run from:
-
-```text
-WorkingDirectory=/home/ec2-user/sevendays-states
-EnvironmentFile=/home/ec2-user/sevendays-states/.env
-ExecStart=java -jar app/app.jar
-```
-
-Typical production service commands:
-
-```bash
-sudo systemctl restart sevendays-states
-sudo systemctl status sevendays-states --no-pager
-sudo journalctl -u sevendays-states -n 100 --no-pager
-```
+EC2 keeps the Git repository at `/home/ec2-user/seven-days-stats` and reads the
+7DTD server data from the separate `/home/ec2-user/7dtd` tree. See `RUNNING.md`
+for initial setup, deployment, and systemd commands.
 
 ## Notes
 

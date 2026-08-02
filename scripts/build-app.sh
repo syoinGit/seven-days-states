@@ -4,8 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-./mvnw clean package
 mkdir -p app
-cp target/sevendays-states-0.0.1-SNAPSHOT.jar app/app.jar
+./mvnw clean package
+cp target/seven-days-stats.jar app/.app.jar.tmp
+mv app/.app.jar.tmp app/app.jar
 
 echo "Built app/app.jar"

@@ -10,9 +10,9 @@
     <relativePath/>
   </parent>
   <groupId>com.yuki</groupId>
-  <artifactId>sevendays-states</artifactId>
+  <artifactId>seven-days-stats</artifactId>
   <version>0.0.1-SNAPSHOT</version>
-  <name>sevendays-states</name>
+  <name>seven-days-stats</name>
   <description>7 Days to Die server log analyzer</description>
 
   <properties>
@@ -73,6 +73,7 @@
   </dependencies>
 
   <build>
+    <finalName>seven-days-stats</finalName>
     <plugins>
       <plugin>
         <groupId>org.springframework.boot</groupId>
