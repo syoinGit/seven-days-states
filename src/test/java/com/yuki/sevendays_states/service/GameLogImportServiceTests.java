@@ -569,6 +569,21 @@ class GameLogImportServiceTests {
   }
 
   @Test
+  void importsPlayerDeathAsTimelineWorldEvent() {
+    GameLogImportResult result = logImportService.importLogLines("death.log", List.of(
+        "2026-07-31T23:09:00 100.000 INF GMSG: Player 'PlayerA' died",
+        "2026-07-31T23:10:00 160.000 INF GMSG: Player 'PlayerB' killed by 'PlayerA'"
+    ));
+
+    assertThat(result.worldEvents()).isEqualTo(2);
+    assertThat(worldEventRepository.findAll())
+        .extracting(row -> row.getEventType() + ":" + row.getActorPlayerName() + ":" + row.getDetailText())
+        .containsExactlyInAnyOrder(
+            "PLAYER_DEATH:PlayerA:null",
+            "PLAYER_DEATH:PlayerB:PlayerA");
+  }
+
+  @Test
   void importsRawTelnetPlayerListWithMultiplePlayersAfterOneCommandLine() {
     List<String> telnetLines = SevenDaysTelnetService.normalizeLpOutput(List.of(
         "lp",

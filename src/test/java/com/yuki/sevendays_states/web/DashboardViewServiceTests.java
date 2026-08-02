@@ -45,9 +45,30 @@ class DashboardViewServiceTests {
     jdbcTemplate.update("delete from t_vehicle_position_transaction");
     jdbcTemplate.update("delete from t_vehicle_current_state");
     jdbcTemplate.update("delete from t_world_event_transaction");
+    jdbcTemplate.update("delete from t_world_time_observation");
     jdbcTemplate.update("delete from m_japanese_translation");
     jdbcTemplate.update("delete from m_world_poi");
     jdbcTemplate.update("delete from m_player");
+  }
+
+  @Test
+  void worldTimeShowsLatestObservationAndAddsOnlyOneTimelineEntryPerDay() {
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    jdbcTemplate.update("""
+        insert into t_world_time_observation
+        (observed_at, game_day, game_hour, game_minute, source, source_hash, raw_response)
+        values (?, 12, 4, 50, 'telnet:gettime', 'time-1', 'Day 12, 04:50'),
+               (?, 12, 6, 15, 'telnet:gettime', 'time-2', 'Day 12, 06:15')
+        """, now.minusMinutes(1), now);
+
+    DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
+
+    assertThat(dashboard.worldTime().day()).isEqualTo(12);
+    assertThat(dashboard.worldTime().time()).isEqualTo("06:15");
+    assertThat(dashboard.travelEntries())
+        .filteredOn(entry -> "DAY_START".equals(entry.kind()))
+        .singleElement()
+        .satisfies(entry -> assertThat(entry.message()).contains("DAY 12が始まった"));
   }
 
   @Test
