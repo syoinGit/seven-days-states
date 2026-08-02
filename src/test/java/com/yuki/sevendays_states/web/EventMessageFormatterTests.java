@@ -28,8 +28,8 @@ class EventMessageFormatterTests {
 
   @Test
   void movementMessageContainsDestinationAndDistance() {
-    assertThat(formatter.format("MOVE", "PlayerA", "移動した", "42.5 m ", "軍事基地"))
-        .isEqualTo("PlayerAが軍事基地で42.5 m 移動！");
+    assertThat(formatter.format("VEHICLE_MOVE", "PlayerA", "移動した", "オートバイ|42.5", "軍事基地"))
+        .isEqualTo("PlayerAが軍事基地でオートバイに乗って42.5 m移動！");
   }
 
   @Test
