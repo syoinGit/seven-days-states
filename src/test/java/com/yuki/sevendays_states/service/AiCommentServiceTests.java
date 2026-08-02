@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -48,5 +49,16 @@ class AiCommentServiceTests {
   void rejectsBlankComment() {
     assertThatThrownBy(() -> service.publish("", "", "test-editor-key"))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void updatesExistingDiaryForSameDate() {
+    LocalDate date = LocalDate.of(2026, 8, 2);
+    service.publish(date, "初稿", "最初の日記", "test-editor-key");
+    service.publish(date, "完成稿", "完成した日記", "test-editor-key");
+
+    assertThat(repository.count()).isOne();
+    assertThat(service.findByDiaryDate(date)).get()
+        .satisfies(diary -> assertThat(diary.title()).isEqualTo("完成稿"));
   }
 }

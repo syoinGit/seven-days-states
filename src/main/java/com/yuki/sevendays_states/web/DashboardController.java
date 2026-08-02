@@ -1,7 +1,7 @@
 package com.yuki.sevendays_states.web;
 
 import com.yuki.sevendays_states.service.AiCommentService;
-import java.util.List;
+import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
@@ -19,7 +19,7 @@ public class DashboardController {
 
   private final DashboardViewService dashboardViewService;
   private final AiCommentService aiCommentService;
-  private final DisplayTimeFormatter displayTimeFormatter = new DisplayTimeFormatter();
+  private final DiaryMaintenanceService diaryMaintenanceService;
 
   @GetMapping("/")
   public String index(Model model) {
@@ -61,34 +61,51 @@ public class DashboardController {
 
   @GetMapping("/ai-comments")
   public String aiComments(Model model) {
-    List<AiCommentView> comments = aiCommentService.history().stream()
-        .map(comment -> new AiCommentView(
-            comment.id(), comment.title(), comment.body(),
-            displayTimeFormatter.format(comment.publishedAt()), comment.sourceType()))
-        .toList();
-    model.addAttribute("comments", comments);
-    model.addAttribute("editorEnabled", aiCommentService.editorEnabled());
-    return "ai-comments";
+    return "redirect:/maintenance/diaries";
   }
 
   @PostMapping("/ai-comments")
-  public String publishAiComment(
+  public String publishAiComment(RedirectAttributes redirectAttributes) {
+    redirectAttributes.addFlashAttribute("error", "AIコメントは日別冒険日記から登録してください。");
+    return "redirect:/maintenance/diaries";
+  }
+
+  @GetMapping("/maintenance/diaries")
+  public String diaryMaintenance(Model model) {
+    model.addAttribute("days", diaryMaintenanceService.days());
+    return "diary-maintenance";
+  }
+
+  @GetMapping("/maintenance/diaries/{date}")
+  public String diaryGenerationData(@PathVariable LocalDate date, Model model) {
+    model.addAttribute("packet", diaryMaintenanceService.packet(date));
+    return "diary-generation-data";
+  }
+
+  @GetMapping("/maintenance/diaries/{date}/edit")
+  public String diaryEditor(@PathVariable LocalDate date, Model model) {
+    model.addAttribute("packet", diaryMaintenanceService.packet(date));
+    model.addAttribute("editorEnabled", aiCommentService.editorEnabled());
+    return "diary-editor";
+  }
+
+  @PostMapping("/maintenance/diaries/{date}/edit")
+  public String publishDiary(
+      @PathVariable LocalDate date,
       @RequestParam String title,
       @RequestParam String body,
       @RequestParam(required = false, defaultValue = "") String editorKey,
       RedirectAttributes redirectAttributes) {
     try {
-      aiCommentService.publish(title, body, editorKey);
-      redirectAttributes.addFlashAttribute("notice", "AI観測コメントを公開しました。");
+      aiCommentService.publish(date, title, body, editorKey);
+      redirectAttributes.addFlashAttribute("notice", date + " の冒険日記を登録しました。");
+      return "redirect:/maintenance/diaries/" + date;
     } catch (IllegalArgumentException e) {
       redirectAttributes.addFlashAttribute("error", e.getMessage());
       redirectAttributes.addFlashAttribute("draftTitle", title);
       redirectAttributes.addFlashAttribute("draftBody", body);
+      return "redirect:/maintenance/diaries/" + date + "/edit";
     }
-    return "redirect:/ai-comments";
   }
 
-  public record AiCommentView(
-      Long id, String title, String body, String publishedAt, String sourceType) {
-  }
 }

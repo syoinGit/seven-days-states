@@ -2,6 +2,7 @@ package com.yuki.sevendays_states.web;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -43,12 +44,11 @@ class DashboardControllerTests {
     assertThat(controller.kills(killModel)).isEqualTo("kill-detail");
     assertThat(controller.vehicles(vehicleModel)).isEqualTo("vehicle-detail");
     assertThat(controller.exploration(explorationModel)).isEqualTo("exploration-detail");
-    assertThat(controller.aiComments(aiCommentModel)).isEqualTo("ai-comments");
+    assertThat(controller.aiComments(aiCommentModel)).isEqualTo("redirect:/maintenance/diaries");
     assertThat(serverModel).containsKey("server");
     assertThat(killModel).containsKey("kills");
     assertThat(vehicleModel).containsKey("vehicles");
     assertThat(explorationModel).containsKey("exploration");
-    assertThat(aiCommentModel).containsKeys("comments", "editorEnabled");
   }
 
   @Test
@@ -58,7 +58,9 @@ class DashboardControllerTests {
         + Files.readString(Path.of("src/main/resources/templates/kill-detail.html"))
         + Files.readString(Path.of("src/main/resources/templates/vehicle-detail.html"));
     template += Files.readString(Path.of("src/main/resources/templates/exploration-detail.html"));
-    template += Files.readString(Path.of("src/main/resources/templates/ai-comments.html"));
+    template += Files.readString(Path.of("src/main/resources/templates/diary-maintenance.html"));
+    template += Files.readString(Path.of("src/main/resources/templates/diary-generation-data.html"));
+    template += Files.readString(Path.of("src/main/resources/templates/diary-editor.html"));
 
     assertThat(template)
         .doesNotContain("Steam_")
@@ -73,5 +75,20 @@ class DashboardControllerTests {
         .doesNotContain("nativeUserId")
         .doesNotContain("sourceLogHash")
         .doesNotContain("sourceFile");
+  }
+
+  @Test
+  void diaryMaintenanceRoutesReturnTheirViews() {
+    LocalDate date = LocalDate.of(2026, 8, 2);
+    ConcurrentModel listModel = new ConcurrentModel();
+    ConcurrentModel dataModel = new ConcurrentModel();
+    ConcurrentModel editorModel = new ConcurrentModel();
+
+    assertThat(controller.diaryMaintenance(listModel)).isEqualTo("diary-maintenance");
+    assertThat(controller.diaryGenerationData(date, dataModel)).isEqualTo("diary-generation-data");
+    assertThat(controller.diaryEditor(date, editorModel)).isEqualTo("diary-editor");
+    assertThat(listModel).containsKey("days");
+    assertThat(dataModel).containsKey("packet");
+    assertThat(editorModel).containsKeys("packet", "editorEnabled");
   }
 }

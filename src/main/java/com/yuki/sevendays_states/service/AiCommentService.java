@@ -3,6 +3,7 @@ package com.yuki.sevendays_states.service;
 import com.yuki.sevendays_states.entity.T_AiComment;
 import com.yuki.sevendays_states.repository.T_AiCommentRepository;
 import java.time.OffsetDateTime;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
@@ -28,12 +29,22 @@ public class AiCommentService {
     return repository.findTop50ByOrderByPublishedAtDescIdDesc().stream().map(this::toEntry).toList();
   }
 
+  public Optional<AiCommentEntry> findByDiaryDate(LocalDate diaryDate) {
+    return repository.findByDiaryDate(diaryDate).map(this::toEntry);
+  }
+
   public boolean editorEnabled() {
     return editorKey != null && !editorKey.isBlank();
   }
 
   @Transactional
   public AiCommentEntry publish(String title, String body, String submittedEditorKey) {
+    return publish(null, title, body, submittedEditorKey);
+  }
+
+  @Transactional
+  public AiCommentEntry publish(
+      LocalDate diaryDate, String title, String body, String submittedEditorKey) {
     String normalizedTitle = normalize(title);
     String normalizedBody = normalize(body);
     if (!editorEnabled()) {
@@ -48,9 +59,12 @@ public class AiCommentService {
     if (!editorKey.equals(submittedEditorKey)) {
       throw new IllegalArgumentException("編集キーが正しくありません。");
     }
-    T_AiComment comment = new T_AiComment();
+    T_AiComment comment = diaryDate == null
+        ? new T_AiComment()
+        : repository.findByDiaryDate(diaryDate).orElseGet(T_AiComment::new);
     comment.setTitle(normalizedTitle);
     comment.setBody(normalizedBody);
+    comment.setDiaryDate(diaryDate);
     comment.setPublishedAt(OffsetDateTime.now(ZoneOffset.UTC));
     comment.setSourceType("MANUAL_BETA");
     return toEntry(repository.save(comment));
@@ -62,10 +76,11 @@ public class AiCommentService {
 
   private AiCommentEntry toEntry(T_AiComment comment) {
     return new AiCommentEntry(
-        comment.getId(), comment.getTitle(), comment.getBody(), comment.getPublishedAt(), comment.getSourceType());
+        comment.getId(), comment.getDiaryDate(), comment.getTitle(), comment.getBody(),
+        comment.getPublishedAt(), comment.getSourceType());
   }
 
   public record AiCommentEntry(
-      Long id, String title, String body, OffsetDateTime publishedAt, String sourceType) {
+      Long id, LocalDate diaryDate, String title, String body, OffsetDateTime publishedAt, String sourceType) {
   }
 }

@@ -8,7 +8,7 @@
     <a th:href="@{/kills}" th:classappend="${activePage == 'rankings'} ? 'active'"><span>02</span>冒険者ランキング</a>
     <a th:href="@{/vehicles}" th:classappend="${activePage == 'vehicles'} ? 'active'"><span>03</span>乗り物ランキング</a>
     <a th:href="@{/exploration}" th:classappend="${activePage == 'exploration'} ? 'active'"><span>04</span>探索済みPOI</a>
-    <a th:href="@{/ai-comments}" th:classappend="${activePage == 'ai-comments'} ? 'active'"><span>AI</span>観測コメント</a>
+    <a th:href="@{/maintenance/diaries}" th:classappend="${activePage == 'diaries'} ? 'active'"><span>AI</span>冒険日記</a>
     <p class="rail-copy">荒廃世界を生きた一日を、<br>記録からもう一度楽しむ。</p>
   </div>
   <a class="server-nav" th:classappend="${activePage == 'server'} ? 'active'" th:href="@{/server}"><span>SYS</span>サーバー情報</a>

@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
+import java.time.LocalDate;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -29,6 +30,9 @@ public class T_AiComment {
 
   @Column(name = "body", nullable = false, columnDefinition = "TEXT")
   private String body;
+
+  @Column(name = "diary_date")
+  private LocalDate diaryDate;
 
   @Column(name = "published_at", nullable = false)
   private OffsetDateTime publishedAt;
