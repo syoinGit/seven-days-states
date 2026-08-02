@@ -445,63 +445,42 @@ public class DashboardViewService {
 
   private List<TravelEntry> travelEntries() {
     List<TravelEntry> entries = jdbcTemplate.query("""
-        select *
-        from (
+        with timeline_entries as (
           select occurred_at,
                  'JOIN' as kind,
                  player_name,
                  'ログインした' as action_text,
                  null as detail_text,
-                 (
-                   select poi.poi_name
-                   from m_world_poi poi
-                   where coalesce(poi.category, '') <> 'part'
-                     and poi.poi_name not like 'part_%'
-                   order by ((poi.x - j.position_x) * (poi.x - j.position_x)
-                         + (poi.z - j.position_z) * (poi.z - j.position_z))
-                   limit 1
-                 ) as poi_name,
+                 null as translation_key,
                  position_x as x,
                  position_y as y,
                  position_z as z
-          from t_player_join_transaction j
+          from (select * from t_player_join_transaction order by occurred_at desc limit 120) j
           union all
           select occurred_at,
                  'LEAVE' as kind,
                  player_name,
                  'ログアウトした' as action_text,
                  null as detail_text,
-                 null as poi_name,
+                 null as translation_key,
                  null as x,
                  null as y,
                  null as z
-          from t_player_leave_transaction
+          from (select * from t_player_leave_transaction order by occurred_at desc limit 120) recent_leave
           union all
           select k.occurred_at,
                  'KILL' as kind,
                  k.player_name,
                  '討伐した' as action_text,
-                 coalesce(
-                   (select tr.display_text
-                    from m_japanese_translation tr
-                    where tr.localization_key = k.target_entity_type
-                    limit 1),
-                   k.target_entity_type
-                 ) as detail_text,
-	                 (
-	                   select poi.poi_name
-	                   from m_world_poi poi
-	                   where k.player_position_x is not null
-	                     and coalesce(poi.category, '') <> 'part'
-	                     and poi.poi_name not like 'part_%'
-	                   order by ((poi.x - k.player_position_x) * (poi.x - k.player_position_x)
-	                         + (poi.z - k.player_position_z) * (poi.z - k.player_position_z))
-	                   limit 1
-	                 ) as poi_name,
-	                 k.player_position_x as x,
-	                 k.player_position_y as y,
-	                 k.player_position_z as z
-          from t_entity_kill_transaction k
+                 k.target_entity_type as detail_text,
+                 k.target_entity_type as translation_key,
+                 k.player_position_x as x,
+                 k.player_position_y as y,
+                 k.player_position_z as z
+          from (select * from t_entity_kill_transaction
+                where lower(player_name) not like 'zombie%'
+                  and lower(player_name) not like 'animal%'
+                order by occurred_at desc limit 120) k
           union all
           select occurred_at,
                  transaction_type as kind,
@@ -521,29 +500,14 @@ public class DashboardViewService {
                    then '眠っていた敵を起こした'
                    else '眠っていた敵が再配置された'
                  end as action_text,
-                 coalesce(
-                   (select tr.display_text
-                    from m_japanese_translation tr
-                    where tr.localization_key = s.entity_class
-                    limit 1),
-                   s.entity_class
-                 ) as detail_text,
-                 (
-                   select poi.poi_name
-                   from m_world_poi poi
-                   where coalesce(poi.category, '') <> 'part'
-                     and poi.poi_name not like 'part_%'
-                   order by ((poi.x - coalesce(s.player_position_x, s.position_x))
-                              * (poi.x - coalesce(s.player_position_x, s.position_x))
-                         + (poi.z - coalesce(s.player_position_z, s.position_z))
-                              * (poi.z - coalesce(s.player_position_z, s.position_z)))
-                   limit 1
-                 ) as poi_name,
-	                 coalesce(player_position_x, position_x) as x,
-	                 coalesce(player_position_y, position_y) as y,
-	                 coalesce(player_position_z, position_z) as z
-          from t_sleeper_transaction s
-          where transaction_type <> 'SLEEPER_RESTORE'
+                 s.entity_class as detail_text,
+                 s.entity_class as translation_key,
+                 coalesce(player_position_x, position_x) as x,
+                 coalesce(player_position_y, position_y) as y,
+                 coalesce(player_position_z, position_z) as z
+          from (select * from t_sleeper_transaction
+                where transaction_type <> 'SLEEPER_RESTORE'
+                order by occurred_at desc limit 120) s
           union all
           select v.occurred_at,
                  'VEHICLE_MOVE' as kind,
@@ -551,41 +515,33 @@ public class DashboardViewService {
                  '移動した' as action_text,
                  coalesce(v.vehicle_name, v.vehicle_type) || '|' ||
                    cast(round(v.movement_distance, 1) as varchar) as detail_text,
-                 (
-                   select poi.poi_name
-                   from m_world_poi poi
-                   where coalesce(poi.category, '') <> 'part'
-                     and poi.poi_name not like 'part_%'
-                   order by ((poi.x - v.position_x) * (poi.x - v.position_x)
-                         + (poi.z - v.position_z) * (poi.z - v.position_z))
-                   limit 1
-                 ) as poi_name,
+                 null as translation_key,
                  v.position_x as x,
                  v.position_y as y,
                  v.position_z as z
-          from t_vehicle_position_transaction v
+          from (select * from t_vehicle_position_transaction
+                where movement_distance >= 1 order by occurred_at desc limit 120) v
           join m_player p on p.id = v.owner_player_id
               or (v.owner_player_id is null and v.owner_cross_platform_id is not null
                   and p.player_key = 'EOS:' || replace(v.owner_cross_platform_id, 'EOS_', ''))
-          where v.movement_distance >= 1
           union all
           select occurred_at,
                  'XP' as kind,
                  player_name,
                  'レベル経験値を獲得した' as action_text,
                  '合計 ' || xp_total as detail_text,
-                 null as poi_name,
+                 null as translation_key,
                  null as x,
                  null as y,
                  null as z
-          from t_level_xp_summary_transaction
+          from (select * from t_level_xp_summary_transaction order by occurred_at desc limit 120) recent_xp
           union all
           select observed_at as occurred_at,
                  'DAY_START' as kind,
                  'WATCHPOINT' as player_name,
                  '新しい一日を観測した' as action_text,
                  'DAY ' || game_day as detail_text,
-                 null as poi_name,
+                 null as translation_key,
                  null as x,
                  null as y,
                  null as z
@@ -609,21 +565,13 @@ public class DashboardViewService {
                    else 'イベントが発生した'
                  end as action_text,
                  w.detail_text,
-                 (
-                   select poi.poi_name
-                   from m_world_poi poi
-                   where w.position_x is not null
-                     and coalesce(poi.category, '') <> 'part'
-                     and poi.poi_name not like 'part_%'
-                   order by ((poi.x - w.position_x) * (poi.x - w.position_x)
-                         + (poi.z - w.position_z) * (poi.z - w.position_z))
-                   limit 1
-                 ) as poi_name,
+                 null as translation_key,
                  w.position_x as x,
                  w.position_y as y,
                  w.position_z as z
-          from t_world_event_transaction w
-          where w.event_type <> 'BLOOD_MOON'
+          from (select * from t_world_event_transaction
+                where event_type <> 'BLOOD_MOON'
+                order by occurred_at desc limit 120) w
           union all
           select v.occurred_at,
                  v.event_type as kind,
@@ -636,29 +584,34 @@ public class DashboardViewService {
                  end as action_text,
                  coalesce(v.vehicle_name, v.vehicle_type) ||
                    case when v.removal_reason is not null then ' / ' || v.removal_reason else '' end as detail_text,
-                 (
-                   select poi.poi_name
-                   from m_world_poi poi
-                   where v.position_x is not null
-                     and coalesce(poi.category, '') <> 'part'
-                     and poi.poi_name not like 'part_%'
-                   order by ((poi.x - v.position_x) * (poi.x - v.position_x)
-                         + (poi.z - v.position_z) * (poi.z - v.position_z))
-                   limit 1
-                 ) as poi_name,
+                 null as translation_key,
                  v.position_x as x,
                  v.position_y as y,
                  v.position_z as z
-          from t_vehicle_position_transaction v
+          from (select * from t_vehicle_position_transaction
+                where event_type in ('VEHICLE_REMOVED', 'VEHICLE_LOADED', 'VEHICLE_POST_INIT')
+                  and (movement_distance < 1 or event_type = 'VEHICLE_REMOVED')
+                order by occurred_at desc limit 120) v
           left join m_player p on p.id = v.owner_player_id
               or (v.owner_player_id is null
                   and v.owner_cross_platform_id is not null
                   and p.player_key = 'EOS:' || replace(v.owner_cross_platform_id, 'EOS_', ''))
-          where v.event_type in ('VEHICLE_REMOVED', 'VEHICLE_LOADED', 'VEHICLE_POST_INIT')
-            and (v.movement_distance < 1 or v.event_type = 'VEHICLE_REMOVED')
-        ) entries
-        order by occurred_at desc
-        limit 120
+        ), recent_entries as (
+          select * from timeline_entries order by occurred_at desc limit 120
+        )
+        select e.occurred_at, e.kind, e.player_name, e.action_text,
+               coalesce((select tr.display_text from m_japanese_translation tr
+                         where tr.localization_key = e.translation_key limit 1),
+                        e.detail_text) as detail_text,
+               (select poi.poi_name from m_world_poi poi
+                where e.x is not null
+                  and coalesce(poi.category, '') <> 'part'
+                  and poi.poi_name not like 'part_%'
+                order by ((poi.x - e.x) * (poi.x - e.x) + (poi.z - e.z) * (poi.z - e.z))
+                limit 1) as poi_name,
+               e.x, e.y, e.z
+        from recent_entries e
+        order by e.occurred_at desc
         """, (rs, rowNum) -> new TravelEntry(
         toDisplayTime(rs.getObject("occurred_at")),
         rs.getString("kind"),

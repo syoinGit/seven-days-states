@@ -90,14 +90,7 @@
             <strong th:text="${player.playerName}">player</strong>
             <small th:text="${player.online == false ? '最終地点：' + player.poiName : player.poiName + ' を探索中'}">探索中</small>
             <small class="pilot-vitals">
-              <span class="hp-row">
-                <span th:text="${player.health != null ? 'HP ' + player.health : 'HP --'}">HP --</span>
-                <span class="hp-track" th:if="${player.health != null}" role="meter" aria-label="HP"
-                      aria-valuemin="0" aria-valuemax="200" th:attr="aria-valuenow=${player.health}">
-                  <i th:style="${'width:' + T(java.lang.Math).min(100, T(java.lang.Math).max(0, player.health * 100 / 200)) + '%'}"
-                     th:classappend="${player.health <= 50 ? ' critical' : (player.health <= 100 ? ' wounded' : '')}"></i>
-                </span>
-              </span>
+              <span th:text="${player.health != null ? 'HP ' + player.health : 'HP --'}">HP --</span>
               <span th:if="${player.online and player.currentVehicle != null}" th:text="${' / ' + player.currentVehicle + 'で移動中'}">vehicle</span>
               <span th:if="${player.online == false}"> / OFFLINE</span>
             </small>
