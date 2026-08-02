@@ -25,6 +25,17 @@ public class AiCommentService {
     return repository.findTopByOrderByPublishedAtDescIdDesc().map(this::toEntry);
   }
 
+  public Optional<AiCommentEntry> latestDiary() {
+    return repository.findTopByDiaryDateIsNotNullOrderByDiaryDateDescPublishedAtDesc()
+        .map(this::toEntry);
+  }
+
+  public List<AiCommentEntry> diaries() {
+    return repository.findTop100ByDiaryDateIsNotNullOrderByDiaryDateDescPublishedAtDesc().stream()
+        .map(this::toEntry)
+        .toList();
+  }
+
   public List<AiCommentEntry> history() {
     return repository.findTop50ByOrderByPublishedAtDescIdDesc().stream().map(this::toEntry).toList();
   }

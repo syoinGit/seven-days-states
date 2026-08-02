@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title th:text="${diary.title + ' | WATCHPOINT'}">冒険日記 | WATCHPOINT</title><link rel="stylesheet" th:href="@{/css/app.css}"></head>
+<body>
+<header class="topbar"><a class="brand" th:href="@{/}"><span class="brand-mark">WP</span><span><b>WATCHPOINT</b><small>WASTELAND FIELD JOURNAL</small></span></a><a class="nav-button" th:href="@{/diaries}">日記一覧へ戻る</a></header>
+<main class="detail-shell"><nav th:replace="~{fragments/navigation :: rail('diaries')}"></nav><section class="layout detail-page">
+  <header class="page-title"><nav class="breadcrumbs"><a th:href="@{/}"><span aria-hidden="true">⌂</span> 冒険記録</a><span>›</span><a th:href="@{/diaries}"><span aria-hidden="true">▤</span> 冒険日記</a><span>›</span><b th:text="${diary.date}">date</b></nav><p class="eyebrow">DAILY FIELD JOURNAL</p><h1 th:text="${diary.title}">日記タイトル</h1><p th:text="${diary.date}">date</p></header>
+  <article class="panel diary-public-detail">
+    <header><span>WATCHPOINT ARCHIVE</span><time th:text="${diary.date}">date</time></header>
+    <p th:text="${diary.body}">日記本文</p>
+    <footer><small th:text="${'登録 ' + diary.publishedAt}">登録日時</small></footer>
+  </article>
+  <a class="primary-link" th:href="@{/diaries}">冒険日記の一覧へ戻る</a>
+</section></main></body></html>

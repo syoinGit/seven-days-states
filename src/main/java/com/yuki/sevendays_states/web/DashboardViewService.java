@@ -5,6 +5,7 @@ import com.yuki.sevendays_states.service.AiCommentService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayDeque;
@@ -1100,10 +1101,11 @@ public class DashboardViewService {
       List<TravelEntry> travelEntries,
       List<VehicleStatus> vehicleStatuses,
       ServerState serverState) {
-    Optional<AiCommentService.AiCommentEntry> manualComment = aiCommentService.latest();
+    Optional<AiCommentService.AiCommentEntry> manualComment = aiCommentService.latestDiary();
     if (manualComment.isPresent()) {
       AiCommentService.AiCommentEntry comment = manualComment.get();
-      return new AiComment(comment.title(), comment.body());
+      return new AiComment(
+          comment.title(), DiaryViewService.excerpt(comment.body(), 180), comment.diaryDate());
     }
     long onlinePlayers = playerStatuses.stream()
         .filter(player -> Boolean.TRUE.equals(player.online()))
@@ -1123,25 +1125,25 @@ public class DashboardViewService {
       PlayerStatus player = lowHealthPlayer.get();
       return new AiComment("AI観測コメント",
           player.playerName() + "のHPが" + player.health()
-              + "。荒野基準でもこれは黄色信号です。包帯と逃げ道を確認しましょう。");
+              + "。荒野基準でもこれは黄色信号です。包帯と逃げ道を確認しましょう。", null);
     }
     if (latestKill.isPresent()) {
       TravelEntry kill = latestKill.get();
       return new AiComment("AI観測コメント",
-          kill.actor() + "がまた一件片付けました。討伐ログは順調、ただし慢心はゾンビの好物です。");
+          kill.actor() + "がまた一件片付けました。討伐ログは順調、ただし慢心はゾンビの好物です。", null);
     }
     if (onlinePlayers > 0) {
       String playerText = onlinePlayers + "人が活動中";
       String vehicleText = activeVehicles > 0 ? "、乗り物は" + activeVehicles + "台追跡中" : "";
       return new AiComment("AI観測コメント",
-          playerText + vehicleText + "。今日はまだ世界がこちらを見逃してくれているようです。今のうちに漁りましょう。");
+          playerText + vehicleText + "。今日はまだ世界がこちらを見逃してくれているようです。今のうちに漁りましょう。", null);
     }
     if (serverState.playerCount() != null && serverState.playerCount() > 0) {
       return new AiComment("AI観測コメント",
-          "サーバー上では" + serverState.playerCount() + "人を検知しています。カード反映待ちならTelnetログの到着待ちです。");
+          "サーバー上では" + serverState.playerCount() + "人を検知しています。カード反映待ちならTelnetログの到着待ちです。", null);
     }
     return new AiComment("AI観測コメント",
-        "現在、荒野は静かです。静かすぎる時ほど、だいたい次の面倒が準備運動しています。");
+        "現在、荒野は静かです。静かすぎる時ほど、だいたい次の面倒が準備運動しています。", null);
   }
 
   private Integer integer(java.sql.ResultSet rs, String column) throws java.sql.SQLException {
@@ -1191,7 +1193,7 @@ public class DashboardViewService {
   ) {
   }
 
-  public record AiComment(String title, String body) {
+  public record AiComment(String title, String body, LocalDate diaryDate) {
   }
 
   public record WorldTimeStatus(String observedAt, Integer day, String time) {
