@@ -1,11 +1,16 @@
 package com.yuki.sevendays_states.web;
 
+import com.yuki.sevendays_states.service.AiCommentService;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.web.server.ResponseStatusException;
 
 @Controller
@@ -13,6 +18,8 @@ import org.springframework.web.server.ResponseStatusException;
 public class DashboardController {
 
   private final DashboardViewService dashboardViewService;
+  private final AiCommentService aiCommentService;
+  private final DisplayTimeFormatter displayTimeFormatter = new DisplayTimeFormatter();
 
   @GetMapping("/")
   public String index(Model model) {
@@ -50,5 +57,38 @@ public class DashboardController {
   public String exploration(Model model) {
     model.addAttribute("exploration", dashboardViewService.explorationDetail());
     return "exploration-detail";
+  }
+
+  @GetMapping("/ai-comments")
+  public String aiComments(Model model) {
+    List<AiCommentView> comments = aiCommentService.history().stream()
+        .map(comment -> new AiCommentView(
+            comment.id(), comment.title(), comment.body(),
+            displayTimeFormatter.format(comment.publishedAt()), comment.sourceType()))
+        .toList();
+    model.addAttribute("comments", comments);
+    model.addAttribute("editorEnabled", aiCommentService.editorEnabled());
+    return "ai-comments";
+  }
+
+  @PostMapping("/ai-comments")
+  public String publishAiComment(
+      @RequestParam String title,
+      @RequestParam String body,
+      @RequestParam(required = false, defaultValue = "") String editorKey,
+      RedirectAttributes redirectAttributes) {
+    try {
+      aiCommentService.publish(title, body, editorKey);
+      redirectAttributes.addFlashAttribute("notice", "AI観測コメントを公開しました。");
+    } catch (IllegalArgumentException e) {
+      redirectAttributes.addFlashAttribute("error", e.getMessage());
+      redirectAttributes.addFlashAttribute("draftTitle", title);
+      redirectAttributes.addFlashAttribute("draftBody", body);
+    }
+    return "redirect:/ai-comments";
+  }
+
+  public record AiCommentView(
+      Long id, String title, String body, String publishedAt, String sourceType) {
   }
 }

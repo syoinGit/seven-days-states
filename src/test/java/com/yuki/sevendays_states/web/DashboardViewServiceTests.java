@@ -46,9 +46,24 @@ class DashboardViewServiceTests {
     jdbcTemplate.update("delete from t_vehicle_current_state");
     jdbcTemplate.update("delete from t_world_event_transaction");
     jdbcTemplate.update("delete from t_world_time_observation");
+    jdbcTemplate.update("delete from t_ai_comment");
     jdbcTemplate.update("delete from m_japanese_translation");
     jdbcTemplate.update("delete from m_world_poi");
     jdbcTemplate.update("delete from m_player");
+  }
+
+  @Test
+  void latestManualAiCommentOverridesGeneratedDashboardComment() {
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    jdbcTemplate.update("""
+        insert into t_ai_comment (title, body, published_at, source_type)
+        values ('荒野通信', '今日は病院探索が進みました。', ?, 'MANUAL_BETA')
+        """, now);
+
+    DashboardViewService.AiComment comment = dashboardViewService.dashboard().aiComment();
+
+    assertThat(comment.title()).isEqualTo("荒野通信");
+    assertThat(comment.body()).isEqualTo("今日は病院探索が進みました。");
   }
 
   @Test

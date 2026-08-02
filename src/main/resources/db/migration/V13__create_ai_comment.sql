@@ -1,0 +1,10 @@
+CREATE TABLE T_AI_COMMENT (
+    ai_comment_id BIGSERIAL PRIMARY KEY,
+    title VARCHAR(120) NOT NULL,
+    body TEXT NOT NULL,
+    published_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    source_type VARCHAR(30) NOT NULL DEFAULT 'MANUAL_BETA',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_t_ai_comment_published_at ON T_AI_COMMENT (published_at);
