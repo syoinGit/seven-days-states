@@ -928,8 +928,9 @@ public class DashboardViewService {
   private List<AdventureRanking> adventureRankings(List<SessionEvent> sessionEvents) {
     Map<String, Long> kills = new HashMap<>();
     killLeaders().forEach(row -> kills.put(row.playerName(), row.kills()));
-    Map<String, Long> playMinutes = playMinutesByPlayer(sessionEvents);
-    return playerStatuses().stream()
+    List<PlayerStatus> statuses = playerStatuses();
+    Map<String, Long> playMinutes = playMinutesByPlayer(sessionEvents, statuses);
+    return statuses.stream()
         .map(player -> new AdventureRanking(
             player.playerId(),
             player.playerName(),
@@ -954,25 +955,55 @@ public class DashboardViewService {
   }
 
   private Map<String, Long> playMinutesByPlayer() {
-    return playMinutesByPlayer(sessionEvents());
+    return playMinutesByPlayer(sessionEvents(), playerStatuses());
   }
 
-  private Map<String, Long> playMinutesByPlayer(List<SessionEvent> events) {
-    Map<String, Deque<OffsetDateTime>> openSessions = new HashMap<>();
+  private Map<String, Long> playMinutesByPlayer(
+      List<SessionEvent> events, List<PlayerStatus> statuses) {
+    Map<String, Long> playerIdsByName = new HashMap<>();
+    events.stream().filter(event -> event.playerId() != null).forEach(
+        event -> playerIdsByName.put(event.playerName(), event.playerId()));
+    statuses.forEach(status -> playerIdsByName.put(status.playerName(), status.playerId()));
+    Map<String, OffsetDateTime> openSessions = new HashMap<>();
+    Map<String, String> playerNames = new HashMap<>();
     Map<String, Long> minutes = new HashMap<>();
     for (SessionEvent event : events) {
+      Long playerId = event.playerId() == null
+          ? playerIdsByName.get(event.playerName())
+          : event.playerId();
+      String key = sessionPlayerKey(playerId, event.playerName());
+      playerNames.put(key, event.playerName());
       if ("JOIN".equals(event.kind())) {
-        openSessions.computeIfAbsent(event.playerName(), ignored -> new ArrayDeque<>()).addLast(event.occurredAt());
+        // A second JOIN without a LEAVE means the earlier session boundary is unknown.
+        // Replace it instead of pairing a future LEAVE with a stale JOIN and inflating play time.
+        openSessions.put(key, event.occurredAt());
         continue;
       }
-      Deque<OffsetDateTime> joins = openSessions.get(event.playerName());
-      if (joins == null || joins.isEmpty()) {
+      OffsetDateTime joinedAt = openSessions.remove(key);
+      if (joinedAt == null) {
         continue;
       }
-      long sessionMinutes = Math.max(0, Duration.between(joins.removeFirst(), event.occurredAt()).toMinutes());
-      minutes.merge(event.playerName(), Math.min(sessionMinutes, 720), Long::sum);
+      long sessionMinutes = Math.max(0, Duration.between(joinedAt, event.occurredAt()).toMinutes());
+      minutes.merge(event.playerName(), sessionMinutes, Long::sum);
+    }
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    for (PlayerStatus status : statuses) {
+      if (!status.online()) {
+        continue;
+      }
+      String key = sessionPlayerKey(status.playerId(), status.playerName());
+      OffsetDateTime joinedAt = openSessions.remove(key);
+      if (joinedAt == null) {
+        continue;
+      }
+      String playerName = playerNames.getOrDefault(key, status.playerName());
+      minutes.merge(playerName, Math.max(0, Duration.between(joinedAt, now).toMinutes()), Long::sum);
     }
     return minutes;
+  }
+
+  private String sessionPlayerKey(Long playerId, String playerName) {
+    return playerId == null ? "NAME:" + playerName : "PLAYER:" + playerId;
   }
 
   private ScoreChart adventureScoreTrend(List<SessionEvent> sessions) {
@@ -1051,14 +1082,18 @@ public class DashboardViewService {
 
   private List<SessionEvent> sessionEvents() {
     return jdbcTemplate.query("""
-        select occurred_at, event_kind, player_name from (
-          select occurred_at, 'JOIN' as event_kind, player_name from t_player_join_transaction
+        select occurred_at, event_kind, player_id, player_name from (
+          select occurred_at, 'JOIN' as event_kind, player_id, player_name
+          from t_player_join_transaction
+          where join_reason in ('JoinMultiplayer', 'EnterMultiplayer')
           union all
-          select occurred_at, 'LEAVE' as event_kind, player_name from t_player_leave_transaction
-        ) session_events order by occurred_at limit 5000
+          select occurred_at, 'LEAVE' as event_kind, player_id, player_name
+          from t_player_leave_transaction
+        ) session_events order by occurred_at
         """, (rs, rowNum) -> new SessionEvent(
         rs.getObject("occurred_at", OffsetDateTime.class),
-        rs.getString("event_kind"), rs.getString("player_name")));
+        rs.getString("event_kind"), rs.getObject("player_id", Long.class),
+        rs.getString("player_name")));
   }
 
   private List<DailyActivity> dailyActivity() {
@@ -1579,7 +1614,8 @@ public class DashboardViewService {
   ) {
   }
 
-  private record SessionEvent(OffsetDateTime occurredAt, String kind, String playerName) {
+  private record SessionEvent(
+      OffsetDateTime occurredAt, String kind, Long playerId, String playerName) {
   }
 
   private record DailyActivityCount(String day, long eventCount) {

@@ -400,9 +400,14 @@ class DashboardViewServiceTests {
         """, now.minusMinutes(2));
     jdbcTemplate.update("""
         insert into t_player_join_transaction
-        (occurred_at, player_name, player_entity_id, player_id, source_file, source_log_hash)
-        values (?, 'PlayerA', 101, 1, 'log', 'ranking-join')
+        (occurred_at, player_name, player_entity_id, player_id, join_reason, source_file, source_log_hash)
+        values (?, 'PlayerA', 101, 1, 'JoinMultiplayer', 'log', 'ranking-join')
         """, now.minusMinutes(65));
+    jdbcTemplate.update("""
+        insert into t_player_join_transaction
+        (occurred_at, player_name, player_entity_id, player_id, join_reason, source_file, source_log_hash)
+        values (?, 'PlayerA', 101, 1, 'Died', 'log', 'ranking-fake-respawn')
+        """, now.minusMinutes(35));
     jdbcTemplate.update("""
         insert into t_player_leave_transaction
         (occurred_at, player_name, player_entity_id, player_id, source_file, source_log_hash)
@@ -416,6 +421,30 @@ class DashboardViewServiceTests {
     assertThat(detail.rankings().getFirst().travelDistance()).isEqualByComparingTo("250.0");
     assertThat(detail.rankings().getFirst().playMinutes()).isEqualTo(60);
     assertThat(detail.dailyActivity()).isNotEmpty();
+  }
+
+  @Test
+  void adventureRankingIncludesCurrentOnlineSession() {
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    jdbcTemplate.update("""
+        insert into m_player (id, player_key, platform, user_id, player_name, last_seen_at)
+        values (1, 'EOS:eos-a', 'EOS', 'eos-a', 'PlayerA', ?)
+        """, Timestamp.from(now.toInstant()));
+    jdbcTemplate.update("""
+        insert into t_player_join_transaction
+        (occurred_at, player_name, player_entity_id, player_id, join_reason, source_file, source_log_hash)
+        values (?, 'PlayerA', 101, 1, 'EnterMultiplayer', 'log', 'online-session-join')
+        """, now.minusMinutes(30));
+    jdbcTemplate.update("""
+        insert into t_player_current_state
+        (player_entity_id, player_id, player_name, position_x, position_z, online, last_updated)
+        values (101, 1, 'PlayerA', 0, 0, true, ?)
+        """, now);
+
+    DashboardViewService.KillDetailView detail = dashboardViewService.killDetail();
+
+    assertThat(detail.rankings()).hasSize(1);
+    assertThat(detail.rankings().getFirst().playMinutes()).isGreaterThanOrEqualTo(30);
   }
 
   @Test
