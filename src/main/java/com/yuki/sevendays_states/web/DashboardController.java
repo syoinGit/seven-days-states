@@ -36,10 +36,11 @@ public class DashboardController {
       @RequestParam String status,
       RedirectAttributes redirectAttributes) {
     // Resolve by the canonical player name so status changes share the chat-command path.
-    playerStatusService.updateByName(
+    var updated = playerStatusService.updateByName(
         dashboardViewService.playerDetail(playerId)
             .map(detail -> detail.status().playerName()).orElse(null), status, "WEB");
-    redirectAttributes.addFlashAttribute("notice", "ステータスを更新しました。");
+    redirectAttributes.addFlashAttribute(updated.isPresent() ? "notice" : "error",
+        updated.isPresent() ? "ステータスを更新しました。" : "オンライン中のみステータスを変更できます。");
     return "redirect:/players/" + playerId;
   }
 

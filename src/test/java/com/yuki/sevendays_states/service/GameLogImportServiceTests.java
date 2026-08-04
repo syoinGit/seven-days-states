@@ -377,6 +377,9 @@ class GameLogImportServiceTests {
   void chatStatusCommandUpdatesPlayerStatus() throws Exception {
     Path log = writeLog("""
         2026-07-29T13:58:10 10775.000 INF PlayerSpawnedInWorld (reason: JoinMultiplayer, position: 0, 38, 0): EntityID=171, PltfmId='Steam_a', CrossId='EOS_a', OwnerID='Steam_a', PlayerName='PlayerA', ClientNumber='1'
+        2026-07-29T13:58:11 10776.000 INF Executing command 'lp' by Telnet from app
+        0. id=171, PlayerA, pos=(0.0, 38.0, 0.0), rot=(0.0, 0.0, 0.0), remote=True, health=100, deaths=0, zombies=0, players=0, score=0, level=1, pltfmid=Steam_a, crossid=EOS_a, ip=127.0.0.1, ping=5
+        Total of 1 in the game
         2026-07-29T13:58:20 10785.000 INF Chat (Global): PlayerA: !飯
         """);
 
