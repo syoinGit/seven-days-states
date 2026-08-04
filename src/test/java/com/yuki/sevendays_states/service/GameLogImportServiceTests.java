@@ -132,6 +132,21 @@ class GameLogImportServiceTests {
   }
 
   @Test
+  void recordsRespawnAndTeleportPositionsWithoutCreatingPlaySessions() throws Exception {
+    Path log = writeLog("""
+        2026-07-26T08:00:00 1000.000 INF PlayerSpawnedInWorld (reason: JoinMultiplayer, position: 0, 50, 0): EntityID=101, PltfmId='Steam_a', CrossId='EOS_a', OwnerID='Steam_a', PlayerName='PlayerA', ClientNumber='1'
+        2026-07-26T08:20:00 2200.000 INF PlayerSpawnedInWorld (reason: Died, position: 10, 50, 10): EntityID=101, PltfmId='Steam_a', CrossId='EOS_a', OwnerID='Steam_a', PlayerName='PlayerA', ClientNumber='1'
+        2026-07-26T08:30:00 2800.000 INF PlayerSpawnedInWorld (reason: Teleport, position: 20, 50, 20): EntityID=101, PltfmId='Steam_a', CrossId='EOS_a', OwnerID='Steam_a', PlayerName='PlayerA', ClientNumber='1'
+        """);
+
+    GameLogImportResult result = logImportService.importLogFile(log);
+
+    assertThat(result.playerJoins()).isEqualTo(1);
+    assertThat(playerJoinRepository.count()).isEqualTo(1);
+    assertThat(playerPositionRepository.count()).isEqualTo(3);
+  }
+
+  @Test
   void importsWorldEventsAndSkipsDuplicates() throws Exception {
     Path log = writeLog("""
         2026-07-29T14:07:38 11342.887 INF AIAirDrop: Spawned supply crate at (460.2, 209.1, 32.6), plane is at (461.73, 219.09, 38.19)

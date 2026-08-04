@@ -285,6 +285,9 @@ public class GameLogImportService {
         event.positionZ(),
         "PLAYER_JOIN",
         "direct_log_position");
+    if (!isActualPlayerJoin(event.reason())) {
+      return playerId;
+    }
     if (playerJoinRepository.existsBySourceLogHash(hash)) {
       return playerId;
     }
@@ -305,6 +308,10 @@ public class GameLogImportService {
     playerJoinRepository.save(row);
     counter.playerJoins++;
     return playerId;
+  }
+
+  private boolean isActualPlayerJoin(String reason) {
+    return "JoinMultiplayer".equals(reason) || "EnterMultiplayer".equals(reason);
   }
 
   private void savePlayerLeave(String sourceFile, PlayerLeaveLogEvent event, Counter counter) {
