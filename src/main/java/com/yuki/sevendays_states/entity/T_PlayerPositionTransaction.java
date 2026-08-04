@@ -55,6 +55,15 @@ public class T_PlayerPositionTransaction {
   @Column(name = "movement_distance", nullable = false)
   private BigDecimal movementDistance = BigDecimal.ZERO;
 
+  @Column(name = "movement_mode", nullable = false, length = 20)
+  private String movementMode = "UNKNOWN";
+
+  @Column(name = "vehicle_entity_id")
+  private Integer vehicleEntityId;
+
+  @Column(name = "movement_inference_method", length = 80)
+  private String movementInferenceMethod;
+
   @Column(name = "source_event_hash", nullable = false, unique = true, length = 64)
   private String sourceEventHash;
 

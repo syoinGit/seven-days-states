@@ -208,6 +208,15 @@ class DashboardViewServiceTests {
         values (99, 'EntityMotorcycle', 'vehicleMotorcycle', 1, 42.0, true,
                 timestamp with time zone '2026-08-02 01:00:00+00:00', 'log', 'vehicle-detail')
         """);
+    jdbcTemplate.update("""
+        insert into t_vehicle_position_transaction
+        (occurred_at, event_type, vehicle_entity_id, vehicle_type, vehicle_name,
+         attributed_player_id, attribution_method, movement_valid, position_x, position_z,
+         movement_distance, source_file, source_log_hash, raw_line)
+        values (timestamp with time zone '2026-08-02 01:00:00+00:00', 'VEHICLE_WRITE', 99,
+                'EntityMotorcycle', 'vehicleMotorcycle', 1, 'online_near_vehicle_position', true,
+                10, 10, 42.0, 'log', 'vehicle-detail-movement', 'raw')
+        """);
 
     assertThat(dashboardViewService.serverDetail().history()).hasSize(1);
     assertThat(dashboardViewService.serverDetail().health().label()).isEqualTo("安定稼働");
@@ -248,6 +257,18 @@ class DashboardViewServiceTests {
                (11, 'EntityBicycle', '自転車', 1, 80.0, false, current_timestamp, 'log', 'bike-b'),
                (12, 'EntityBicycle', '自転車', null, 9999.0, true, current_timestamp, 'log', 'bike-noise')
         """);
+    jdbcTemplate.update("""
+        insert into t_vehicle_position_transaction
+        (occurred_at, event_type, vehicle_entity_id, vehicle_type, vehicle_name,
+         attributed_player_id, attribution_method, movement_valid, movement_distance,
+         source_file, source_log_hash, raw_line)
+        values (current_timestamp, 'VEHICLE_WRITE', 10, 'EntityBicycle', '自転車', 1,
+                'online_near_vehicle_position', true, 120.0, 'log', 'bike-a-move', 'raw'),
+               (current_timestamp, 'VEHICLE_WRITE', 11, 'EntityBicycle', '自転車', 1,
+                'online_near_vehicle_position', true, 80.0, 'log', 'bike-b-move', 'raw'),
+               (current_timestamp, 'VEHICLE_WRITE', 12, 'EntityBicycle', '自転車', null,
+                null, true, 9999.0, 'log', 'bike-noise-move', 'raw')
+        """);
 
     DashboardViewService.VehicleDetailView detail = dashboardViewService.vehicleDetail();
 
@@ -256,7 +277,7 @@ class DashboardViewServiceTests {
     assertThat(detail.vehicles().getFirst().vehicleCount()).isEqualTo(2);
     assertThat(detail.vehicles().getFirst().totalDistance()).isEqualByComparingTo("200.0");
     assertThat(detail.summary().vehicleCount()).isEqualTo(2);
-    assertThat(detail.summary().activeCount()).isEqualTo(1);
+    assertThat(detail.summary().activeCount()).isEqualTo(2);
     assertThat(detail.typeRankings()).singleElement()
         .satisfies(type -> assertThat(type.totalDistance()).isEqualByComparingTo("200.0"));
   }
@@ -277,8 +298,10 @@ class DashboardViewServiceTests {
     jdbcTemplate.update("""
         insert into t_vehicle_position_transaction
         (occurred_at, event_type, vehicle_entity_id, vehicle_type, vehicle_name, owner_player_id,
+         attributed_player_id, attribution_method, movement_valid,
          position_x, position_y, position_z, movement_distance, source_file, source_log_hash, raw_line)
         values (?, 'VEHICLE_LOADED', 99, 'EntityMotorcycle', 'オートバイ', 1,
+                1, 'online_near_vehicle_position', true,
                 200, 30, 200, 42.5, 'log', 'vehicle-move-only', 'raw')
         """, now.minusMinutes(1));
 
@@ -388,9 +411,10 @@ class DashboardViewServiceTests {
     jdbcTemplate.update("""
         insert into t_player_position_transaction
         (occurred_at, player_name, player_entity_id, player_id, position_x, position_y, position_z,
-         position_source_type, inference_method, movement_distance, source_event_hash, source_file)
+         position_source_type, inference_method, movement_distance, movement_mode,
+         source_event_hash, source_file)
         values (?, 'PlayerA', 101, 1, 0, 0, 0, 'LP_COMMAND', 'direct_telnet_lp', 250.0,
-                'ranking-position', 'telnet:lp')
+                'ON_FOOT', 'ranking-position', 'telnet:lp')
         """, now.minusMinutes(1));
     jdbcTemplate.update("""
         insert into t_entity_kill_transaction
@@ -705,16 +729,19 @@ class DashboardViewServiceTests {
     jdbcTemplate.update("""
         insert into t_vehicle_position_transaction
         (occurred_at, event_type, vehicle_entity_id, vehicle_type, vehicle_name, owner_player_id,
+         attributed_player_id, attribution_method, movement_valid,
          position_x, position_y, position_z, movement_distance, source_file, source_log_hash, raw_line)
         values (timestamp with time zone '2026-07-29 05:56:11+00:00', 'VEHICLE_LOADED', 2631, 'EntityBicycle',
-                'vehicleBicycle', 1, 442, 38, -615, 20.0, 'log', 'vehicle-loaded', 'raw')
+                'vehicleBicycle', 1, 1, 'online_near_vehicle_position', true,
+                442, 38, -615, 20.0, 'log', 'vehicle-loaded', 'raw')
         """);
     jdbcTemplate.update("""
         insert into t_player_position_transaction
         (occurred_at, player_name, player_entity_id, player_id, position_x, position_y, position_z,
-         position_source_type, inference_method, movement_distance, source_event_hash, source_file)
+         position_source_type, inference_method, movement_distance, movement_mode,
+         source_event_hash, source_file)
         values (timestamp with time zone '2026-07-29 05:58:10+00:00', 'PlayerA', 171, 1, 450, 38, -605,
-                'LP_COMMAND', 'direct_telnet_lp', 12.5, 'player-position', 'telnet:lp')
+                'LP_COMMAND', 'direct_telnet_lp', 12.5, 'ON_FOOT', 'player-position', 'telnet:lp')
         """);
 
     DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
