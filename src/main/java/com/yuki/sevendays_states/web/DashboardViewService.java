@@ -158,12 +158,12 @@ public class DashboardViewService {
                  (
                    select coalesce(sum(d.movement_distance), 0)
                    from t_player_position_transaction d
-                   where d.player_id = p.id
+                   where d.player_id = p.id and d.movement_mode = 'ON_FOOT'
                  ) as travel_distance,
                  (
                    select coalesce(sum(v.movement_distance), 0)
                    from t_vehicle_position_transaction v
-                   where v.owner_player_id = p.id
+                   where v.attributed_player_id = p.id and v.movement_valid = true
                  ) as vehicle_distance,
                  (
                    select coalesce(v.vehicle_name, v.vehicle_type)
@@ -211,8 +211,9 @@ public class DashboardViewService {
         )
         select player_id, player_name, world_name, game_name, last_login, x, y, z,
                health, deaths, level, ping, travel_distance, vehicle_distance, current_vehicle,
-               online, poi_name, poi_category
-        from status_rows
+               online, poi_name, poi_category,
+               (select status from t_player_status ps where ps.player_id = sr.player_id) as custom_status
+        from status_rows sr
         where card_rank = 1
         order by last_login desc nulls last, player_name
         limit 12
@@ -232,7 +233,8 @@ public class DashboardViewService {
         rs.getBigDecimal("travel_distance"),
         rs.getBigDecimal("vehicle_distance"),
         rs.getString("current_vehicle"),
-        booleanValue(rs, "online")), currentStateFreshAfter);
+        booleanValue(rs, "online"),
+        rs.getString("custom_status")), currentStateFreshAfter);
   }
 
   public Optional<PlayerDetailView> playerDetail(Long playerId) {
@@ -315,12 +317,12 @@ public class DashboardViewService {
                (
                  select coalesce(sum(d.movement_distance), 0)
                  from t_player_position_transaction d
-                 where d.player_id = p.id
+                 where d.player_id = p.id and d.movement_mode = 'ON_FOOT'
                ) as travel_distance,
                (
                  select coalesce(sum(v.movement_distance), 0)
                  from t_vehicle_position_transaction v
-                 where v.owner_player_id = p.id
+                 where v.attributed_player_id = p.id and v.movement_valid = true
                ) as vehicle_distance,
                (
                  select coalesce(v.vehicle_name, v.vehicle_type)
@@ -354,6 +356,7 @@ public class DashboardViewService {
                        + (poi.z - coalesce(c.position_z, pp.position_z, s.z)) * (poi.z - coalesce(c.position_z, pp.position_z, s.z)))
                  limit 1
                ) as poi_category
+               , (select status from t_player_status ps where ps.player_id = p.id) as custom_status
         from player_identity p
         left join latest_snapshot s on s.player_id = p.id
         left join latest_current_state c on c.player_id = p.id
@@ -375,7 +378,8 @@ public class DashboardViewService {
         rs.getBigDecimal("travel_distance"),
         rs.getBigDecimal("vehicle_distance"),
         rs.getString("current_vehicle"),
-        booleanValue(rs, "online")), playerId, playerId, playerId, currentStateFreshAfter);
+        booleanValue(rs, "online"),
+        rs.getString("custom_status")), playerId, playerId, playerId, currentStateFreshAfter);
     if (statuses.isEmpty()) {
       return Optional.empty();
     }
@@ -404,7 +408,7 @@ public class DashboardViewService {
     String favoriteVehicle = jdbcTemplate.query("""
         select coalesce(v.vehicle_name, v.vehicle_type) as vehicle_name
         from t_vehicle_position_transaction v
-        where v.owner_player_id = ?
+        where v.attributed_player_id = ? and v.movement_valid = true
         group by coalesce(v.vehicle_name, v.vehicle_type)
         order by sum(v.movement_distance) desc limit 1
         """, rs -> rs.next() ? rs.getString("vehicle_name") : "未記録", playerId);
@@ -414,10 +418,13 @@ public class DashboardViewService {
           from t_entity_kill_transaction where player_id = ? group by cast(occurred_at as date)
           union all
           select cast(occurred_at as date), 0, coalesce(sum(movement_distance), 0)
-          from t_player_position_transaction where player_id = ? group by cast(occurred_at as date)
+          from t_player_position_transaction where player_id = ? and movement_mode = 'ON_FOOT'
+          group by cast(occurred_at as date)
           union all
           select cast(v.occurred_at as date), 0, coalesce(sum(v.movement_distance), 0)
-          from t_vehicle_position_transaction v where v.owner_player_id = ? group by cast(v.occurred_at as date)
+          from t_vehicle_position_transaction v
+          where v.attributed_player_id = ? and v.movement_valid = true
+          group by cast(v.occurred_at as date)
         ) activity group by activity_day order by activity_day desc limit 14
         """, (rs, rowNum) -> new PlayerDailyActivity(
         rs.getObject("activity_day").toString(), rs.getLong("kills"),
@@ -520,10 +527,9 @@ public class DashboardViewService {
                  v.position_y as y,
                  v.position_z as z
           from (select * from t_vehicle_position_transaction
-                where movement_distance >= 1 order by occurred_at desc limit 120) v
-          join m_player p on p.id = v.owner_player_id
-              or (v.owner_player_id is null and v.owner_cross_platform_id is not null
-                  and p.player_key = 'EOS:' || replace(v.owner_cross_platform_id, 'EOS_', ''))
+                where movement_valid = true and attributed_player_id is not null
+                  and movement_distance >= 1 order by occurred_at desc limit 120) v
+          join m_player p on p.id = v.attributed_player_id
           union all
           select occurred_at,
                  'XP' as kind,
@@ -705,14 +711,13 @@ public class DashboardViewService {
         select min(v.vehicle_entity_id) as representative_id,
                coalesce(v.vehicle_name, v.vehicle_type) as vehicle_name,
                p.player_name as owner_name,
-               count(*) as vehicle_count,
-               sum(v.total_distance) as total_distance,
-               sum(case when v.active = true then 1 else 0 end) as active_count,
-               max(v.last_updated) as last_updated
-        from t_vehicle_current_state v
-        join m_player p on p.id = v.owner_player_id
-            or (v.owner_player_id is null and v.owner_cross_platform_id is not null
-                and p.player_key = 'EOS:' || replace(v.owner_cross_platform_id, 'EOS_', ''))
+               count(distinct v.vehicle_entity_id) as vehicle_count,
+               sum(v.movement_distance) as total_distance,
+               1 as active_count,
+               max(v.occurred_at) as last_updated
+        from t_vehicle_position_transaction v
+        join m_player p on p.id = v.attributed_player_id
+        where v.movement_valid = true and v.movement_distance > 0
         group by p.id, p.player_name, coalesce(v.vehicle_name, v.vehicle_type)
         order by total_distance desc, owner_name, vehicle_name
         """, (rs, rowNum) -> new VehicleStatus(
@@ -1013,12 +1018,12 @@ public class DashboardViewService {
           from t_entity_kill_transaction
           union all
           select occurred_at, player_name, movement_distance / 100 as score_delta
-          from t_player_position_transaction where movement_distance > 0
+          from t_player_position_transaction where movement_distance > 0 and movement_mode = 'ON_FOOT'
           union all
           select v.occurred_at, p.player_name, v.movement_distance / 100 as score_delta
           from t_vehicle_position_transaction v
-          join m_player p on p.id = v.owner_player_id
-          where v.movement_distance > 0
+          join m_player p on p.id = v.attributed_player_id
+          where v.movement_valid = true and v.movement_distance > 0
         ) score_events
         where player_name is not null and player_name <> ''
         order by occurred_at
@@ -1141,11 +1146,12 @@ public class DashboardViewService {
   public VehicleDetailView vehicleDetail() {
     List<VehicleStatus> vehicles = vehicleStatuses();
     VehicleSummary summary = jdbcTemplate.queryForObject("""
-        select count(*) as vehicle_count,
-               sum(case when active = true then 1 else 0 end) as active_count,
-               count(distinct owner_player_id) as owner_count,
-               coalesce(sum(total_distance), 0) as total_distance
-        from t_vehicle_current_state where owner_player_id is not null
+        select count(distinct vehicle_entity_id) as vehicle_count,
+               count(distinct vehicle_entity_id) as active_count,
+               count(distinct attributed_player_id) as owner_count,
+               coalesce(sum(movement_distance), 0) as total_distance
+        from t_vehicle_position_transaction
+        where attributed_player_id is not null and movement_valid = true
         """, (rs, rowNum) -> new VehicleSummary(
         rs.getLong("vehicle_count"), rs.getLong("active_count"),
         rs.getLong("owner_count"), rs.getBigDecimal("total_distance")));
@@ -1153,7 +1159,7 @@ public class DashboardViewService {
         select cast(occurred_at as date) as travel_day,
                coalesce(sum(movement_distance), 0) as distance
         from t_vehicle_position_transaction
-        where owner_player_id is not null and movement_distance > 0
+        where attributed_player_id is not null and movement_valid = true and movement_distance > 0
         group by cast(occurred_at as date)
         order by travel_day desc limit 14
         """, (rs, rowNum) -> new VehicleDailyDistance(
@@ -1168,8 +1174,10 @@ public class DashboardViewService {
             maxDistance.max(BigDecimal.ONE), 0, RoundingMode.HALF_UP).longValue()))).toList();
     List<VehicleTypeRanking> types = jdbcTemplate.query("""
         select coalesce(vehicle_name, vehicle_type) as vehicle_name,
-               count(*) as vehicle_count, coalesce(sum(total_distance), 0) as total_distance
-        from t_vehicle_current_state where owner_player_id is not null
+               count(distinct vehicle_entity_id) as vehicle_count,
+               coalesce(sum(movement_distance), 0) as total_distance
+        from t_vehicle_position_transaction
+        where attributed_player_id is not null and movement_valid = true
         group by coalesce(vehicle_name, vehicle_type)
         order by total_distance desc
         """, (rs, rowNum) -> new VehicleTypeRanking(
@@ -1503,7 +1511,8 @@ public class DashboardViewService {
       BigDecimal travelDistance,
       BigDecimal vehicleDistance,
       String currentVehicle,
-      Boolean online
+      Boolean online,
+      String customStatus
   ) {
   }
 

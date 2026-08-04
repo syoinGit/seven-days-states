@@ -155,4 +155,5 @@ public record SevenDaysDataProperties(
           : translationResource;
     }
   }
+
 }

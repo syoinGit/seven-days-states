@@ -18,7 +18,13 @@
     <nav class="breadcrumbs"><a th:href="@{/}"><span aria-hidden="true">⌂</span> 冒険記録</a><span>›</span><b><span aria-hidden="true">♙</span> プレイヤー</b></nav>
     <p class="eyebrow">PLAYER / PERSONAL RECORD</p>
     <h1 th:text="${player.status.playerName}">player</h1>
-    <p><span th:text="${player.status.online == false ? 'オフライン' : 'オンライン'}">オンライン</span> / <span th:text="${player.status.poiName}">荒野のどこか</span></p>
+    <p><span th:text="${player.status.customStatus == 'EATING' ? '🍚 ごはん中' : (player.status.customStatus == 'AFK' ? '💤 AFK' : (player.status.customStatus == 'OUT' ? '🚗 外出' : (player.status.customStatus == 'SLEEPING' ? '🛏 就寝中' : (player.status.customStatus == 'ACTIVE' ? '🟢 活動中' : (player.status.online == false ? 'オフライン' : 'オンライン')))))}">オンライン</span> / <span th:text="${player.status.poiName}">荒野のどこか</span></p>
+    <form class="status-actions" method="post" th:action="@{/players/{id}/status(id=${player.status.playerId})}">
+      <button name="status" value="ACTIVE" type="submit">🟢 活動中</button>
+      <button name="status" value="EATING" type="submit">🍚 ごはん中</button>
+      <button name="status" value="AFK" type="submit">💤 AFK</button>
+      <button name="status" value="OUT" type="submit">🚗 外出</button>
+    </form>
   </header>
   <section class="players-now detail-summary">
     <article class="player-card">

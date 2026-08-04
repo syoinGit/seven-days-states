@@ -32,6 +32,7 @@ import com.yuki.sevendays_states.log.parser.LevelXpSummaryLogParser;
 import com.yuki.sevendays_states.log.parser.PlayerJoinLogParser;
 import com.yuki.sevendays_states.log.parser.PlayerLeaveLogParser;
 import com.yuki.sevendays_states.log.parser.PlayerDeathLogParser;
+import com.yuki.sevendays_states.log.parser.PlayerChatCommandParser;
 import com.yuki.sevendays_states.log.parser.PlayerListPositionLogParser;
 import com.yuki.sevendays_states.log.parser.ServerMetricLogParser;
 import com.yuki.sevendays_states.log.parser.SleeperRestoreLogParser;
@@ -87,6 +88,9 @@ public class GameLogImportService {
   private static final int MIN_VEHICLE_OWNER_DISTANCE_ADVANTAGE = 3;
   private static final Duration MAX_VEHICLE_OWNER_POSITION_AGE = Duration.ofSeconds(30);
   private static final Duration MAX_PLAYER_MOVEMENT_GAP = Duration.ofMinutes(2);
+  private static final Duration MAX_VEHICLE_MOVEMENT_GAP = Duration.ofMinutes(5);
+  private static final double MAX_PLAUSIBLE_VEHICLE_SPEED_METERS_PER_SECOND = 50.0;
+  private static final double MAX_ON_FOOT_SPEED_METERS_PER_SECOND = 12.0;
   private static final int VEHICLE_ENTITY_REUSE_DISTANCE = 50;
 
   private final SevenDaysDataProperties properties;
@@ -100,6 +104,7 @@ public class GameLogImportService {
   private final T_SleeperTransactionRepository sleeperRepository;
   private final T_ServerMetricRepository serverMetricRepository;
   private final T_WorldEventTransactionRepository worldEventRepository;
+  private final PlayerStatusService playerStatusService;
   private final T_VehicleCurrentStateRepository vehicleCurrentStateRepository;
   private final T_VehiclePositionTransactionRepository vehiclePositionRepository;
   private final AtomicBoolean running = new AtomicBoolean(false);
@@ -108,6 +113,7 @@ public class GameLogImportService {
   private final PlayerJoinLogParser playerJoinParser = new PlayerJoinLogParser(lineParser);
   private final PlayerLeaveLogParser playerLeaveParser = new PlayerLeaveLogParser(lineParser);
   private final PlayerDeathLogParser playerDeathParser = new PlayerDeathLogParser(lineParser);
+  private final PlayerChatCommandParser playerChatCommandParser = new PlayerChatCommandParser();
   private final EntityKillLogParser entityKillParser = new EntityKillLogParser(lineParser);
   private final LevelXpSummaryLogParser levelXpSummaryParser = new LevelXpSummaryLogParser(lineParser);
   private final PlayerListPositionLogParser playerListPositionParser = new PlayerListPositionLogParser(lineParser);
@@ -213,6 +219,8 @@ public class GameLogImportService {
   }
 
   private void parseSingleLine(String sourceFile, ParsedLogLine line, LogImportContext context, Counter counter) {
+    playerChatCommandParser.parse(line).ifPresent(command ->
+        playerStatusService.updateFromChat(command.playerName(), command.command()));
     Optional<PlayerJoinLogEvent> join = playerJoinParser.parse(line);
     if (join.isPresent()) {
       Long playerId = savePlayerJoin(sourceFile, join.get(), counter);
@@ -753,8 +761,12 @@ public class GameLogImportService {
     row.setPositionZ(positionZ);
     row.setPositionSourceType(positionSourceType);
     row.setInferenceMethod(inferenceMethod);
-    row.setMovementDistance(playerMovementDistance(
-        playerId, playerEntityId, occurredAt, positionX, positionZ, positionSourceType));
+    PlayerMovement movement = playerMovement(
+        playerId, playerEntityId, occurredAt, positionX, positionZ, positionSourceType);
+    row.setMovementDistance(movement.distance());
+    row.setMovementMode(movement.mode());
+    row.setVehicleEntityId(movement.vehicleEntityId());
+    row.setMovementInferenceMethod(movement.inferenceMethod());
     row.setSourceEventHash(sourceEventHash);
     row.setSourceFile(sourceFile);
     playerPositionRepository.save(row);
@@ -840,17 +852,24 @@ public class GameLogImportService {
     }
     T_VehicleCurrentState currentState = vehicleCurrentStateRepository.findById(event.vehicleEntityId())
         .orElseGet(T_VehicleCurrentState::new);
-    boolean reusedVehicleEntity = isReusedVehicleEntity(currentState, event);
+    boolean updatesCurrentState = currentState.getVehicleEntityId() == null
+        || currentState.getLastUpdated() == null
+        || event.occurredAt().isAfter(currentState.getLastUpdated());
+    boolean reusedVehicleEntity = updatesCurrentState && isReusedVehicleEntity(currentState, event);
     if (reusedVehicleEntity) {
       currentState.setOwnerPlayerId(null);
       currentState.setOwnerCrossPlatformId(null);
       currentState.setOwnerInferenceMethod(null);
       currentState.setTotalDistance(BigDecimal.ZERO);
     }
-    BigDecimal movementDistance = reusedVehicleEntity
-        ? BigDecimal.ZERO
-        : vehicleMovementDistance(currentState, event);
+    VehicleMovement movement = reusedVehicleEntity
+        ? VehicleMovement.invalid()
+        : vehicleMovement(currentState, event);
+    BigDecimal movementDistance = movement.valid() ? movement.distance() : BigDecimal.ZERO;
     VehicleOwner owner = resolveVehicleOwner(event, currentState, movementDistance);
+    VehicleOwner driver = movement.valid()
+        ? resolveVehicleDriver(event)
+        : new VehicleOwner(null, null, null);
 
     T_VehiclePositionTransaction history = new T_VehiclePositionTransaction();
     history.setOccurredAt(event.occurredAt());
@@ -861,6 +880,9 @@ public class GameLogImportService {
     history.setOwnerPlayerId(owner.playerId());
     history.setOwnerCrossPlatformId(owner.crossPlatformId());
     history.setOwnerInferenceMethod(owner.inferenceMethod());
+    history.setAttributedPlayerId(driver.playerId());
+    history.setAttributionMethod(driver.inferenceMethod());
+    history.setMovementValid(movement.valid());
     history.setPositionX(event.positionX());
     history.setPositionY(event.positionY());
     history.setPositionZ(event.positionZ());
@@ -870,6 +892,11 @@ public class GameLogImportService {
     history.setSourceLogHash(hash);
     history.setRawLine(event.rawLine());
     vehiclePositionRepository.save(history);
+
+    if (!updatesCurrentState) {
+      counter.vehicleEvents++;
+      return;
+    }
 
     currentState.setVehicleEntityId(event.vehicleEntityId());
     currentState.setVehicleType(event.vehicleType());
@@ -953,6 +980,13 @@ public class GameLogImportService {
     return Optional.of(nearest.player());
   }
 
+  private VehicleOwner resolveVehicleDriver(VehicleLogEvent event) {
+    return inferVehicleOwnerByPosition(event)
+        .map(player -> new VehicleOwner(
+            player.getPlayerId(), player.getCrossPlatformId(), "online_near_vehicle_position"))
+        .orElseGet(() -> new VehicleOwner(null, null, null));
+  }
+
   private boolean isFreshVehicleOwnerPosition(T_PlayerCurrentState player, OffsetDateTime eventTime) {
     if (player.getLastUpdated() == null || player.getLastUpdated().isAfter(eventTime.plusSeconds(5))) {
       return false;
@@ -981,20 +1015,31 @@ public class GameLogImportService {
     return findExistingPlayer("EOS:" + eosUserId, "EOS", eosUserId, null, null);
   }
 
-  private BigDecimal vehicleMovementDistance(T_VehicleCurrentState currentState, VehicleLogEvent event) {
+  private VehicleMovement vehicleMovement(T_VehicleCurrentState currentState, VehicleLogEvent event) {
     if (currentState.getVehicleEntityId() == null
         || currentState.getPositionX() == null
         || currentState.getPositionZ() == null
         || event.positionX() == null
-        || event.positionZ() == null) {
-      return BigDecimal.ZERO;
+        || event.positionZ() == null
+        || currentState.getLastUpdated() == null
+        || !event.occurredAt().isAfter(currentState.getLastUpdated())) {
+      return VehicleMovement.invalid();
+    }
+    Duration elapsed = Duration.between(currentState.getLastUpdated(), event.occurredAt());
+    if (elapsed.compareTo(MAX_VEHICLE_MOVEMENT_GAP) > 0) {
+      return VehicleMovement.invalid();
     }
     double horizontalDistance = distance(currentState.getPositionX(), currentState.getPositionZ(),
         event.positionX(), event.positionZ());
-    return BigDecimal.valueOf(horizontalDistance).setScale(1, RoundingMode.HALF_UP);
+    if (horizontalDistance / Math.max(1, elapsed.toSeconds())
+        > MAX_PLAUSIBLE_VEHICLE_SPEED_METERS_PER_SECOND) {
+      return VehicleMovement.invalid();
+    }
+    return new VehicleMovement(
+        BigDecimal.valueOf(horizontalDistance).setScale(1, RoundingMode.HALF_UP), true);
   }
 
-  private BigDecimal playerMovementDistance(
+  private PlayerMovement playerMovement(
       Long playerId,
       int playerEntityId,
       OffsetDateTime occurredAt,
@@ -1002,7 +1047,7 @@ public class GameLogImportService {
       int positionZ,
       String positionSourceType) {
     if (!"LP_COMMAND".equals(positionSourceType)) {
-      return BigDecimal.ZERO;
+      return PlayerMovement.unknown();
     }
     Optional<T_PlayerPositionTransaction> previous = playerId == null
         ? playerPositionRepository.findTopByPlayerEntityIdOrderByOccurredAtDescIdDesc(playerEntityId)
@@ -1011,10 +1056,31 @@ public class GameLogImportService {
         || previous.get().getOccurredAt() == null
         || !occurredAt.isAfter(previous.get().getOccurredAt())
         || previous.get().getOccurredAt().isBefore(occurredAt.minus(MAX_PLAYER_MOVEMENT_GAP))) {
-      return BigDecimal.ZERO;
+      return PlayerMovement.unknown();
     }
     double movement = distance(previous.get().getPositionX(), previous.get().getPositionZ(), positionX, positionZ);
-    return BigDecimal.valueOf(movement).setScale(1, RoundingMode.HALF_UP);
+    BigDecimal measured = BigDecimal.valueOf(movement).setScale(1, RoundingMode.HALF_UP);
+    if (movement < 1) {
+      return new PlayerMovement(measured, "STATIONARY", null, "consecutive_lp_position");
+    }
+    if (playerId != null) {
+      Optional<T_VehiclePositionTransaction> vehicle = vehiclePositionRepository
+          .findTopByAttributedPlayerIdAndMovementValidTrueAndOccurredAtBetweenOrderByOccurredAtDescIdDesc(
+              playerId, previous.get().getOccurredAt().minusSeconds(5), occurredAt.plusSeconds(5));
+      if (vehicle.isPresent()
+          && vehicle.get().getPositionX() != null
+          && vehicle.get().getPositionZ() != null
+          && distance(vehicle.get().getPositionX(), vehicle.get().getPositionZ(), positionX, positionZ)
+              <= MAX_VEHICLE_OWNER_DISTANCE) {
+        return new PlayerMovement(measured, "VEHICLE", vehicle.get().getVehicleEntityId(),
+            "matched_verified_vehicle_position");
+      }
+    }
+    double seconds = Duration.between(previous.get().getOccurredAt(), occurredAt).toMillis() / 1000.0;
+    if (movement / Math.max(1.0, seconds) <= MAX_ON_FOOT_SPEED_METERS_PER_SECOND) {
+      return new PlayerMovement(measured, "ON_FOOT", null, "plausible_on_foot_speed");
+    }
+    return new PlayerMovement(measured, "UNKNOWN", null, "movement_speed_ambiguous");
   }
 
   private boolean shouldStoreServerMetric(ServerMetricLogEvent event) {
@@ -1281,5 +1347,21 @@ public class GameLogImportService {
   }
 
   private record VehicleOwnerCandidate(T_PlayerCurrentState player, double distance) {
+  }
+
+  private record VehicleMovement(BigDecimal distance, boolean valid) {
+    private static VehicleMovement invalid() {
+      return new VehicleMovement(BigDecimal.ZERO, false);
+    }
+  }
+
+  private record PlayerMovement(
+      BigDecimal distance,
+      String mode,
+      Integer vehicleEntityId,
+      String inferenceMethod) {
+    private static PlayerMovement unknown() {
+      return new PlayerMovement(BigDecimal.ZERO, "UNKNOWN", null, null);
+    }
   }
 }

@@ -49,6 +49,15 @@ public class T_VehiclePositionTransaction {
   @Column(name = "owner_inference_method", length = 80)
   private String ownerInferenceMethod;
 
+  @Column(name = "attributed_player_id")
+  private Long attributedPlayerId;
+
+  @Column(name = "attribution_method", length = 80)
+  private String attributionMethod;
+
+  @Column(name = "movement_valid", nullable = false)
+  private boolean movementValid;
+
   @Column(name = "position_x")
   private Integer positionX;
 

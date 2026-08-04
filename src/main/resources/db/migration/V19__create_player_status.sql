@@ -1,0 +1,7 @@
+CREATE TABLE T_PLAYER_STATUS (
+    player_id BIGINT PRIMARY KEY REFERENCES M_PLAYER(id),
+    status VARCHAR(20) NOT NULL,
+    source VARCHAR(30) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL
+);
+CREATE INDEX idx_t_player_status_status ON T_PLAYER_STATUS(status);

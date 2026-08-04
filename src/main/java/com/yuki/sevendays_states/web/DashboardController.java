@@ -1,6 +1,7 @@
 package com.yuki.sevendays_states.web;
 
 import com.yuki.sevendays_states.service.AiCommentService;
+import com.yuki.sevendays_states.service.PlayerStatusService;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,11 +22,25 @@ public class DashboardController {
   private final AiCommentService aiCommentService;
   private final DiaryMaintenanceService diaryMaintenanceService;
   private final DiaryViewService diaryViewService;
+  private final PlayerStatusService playerStatusService;
 
   @GetMapping("/")
   public String index(Model model) {
     model.addAttribute("dashboard", dashboardViewService.dashboard());
     return "dashboard";
+  }
+
+  @PostMapping("/players/{playerId}/status")
+  public String updateStatus(
+      @PathVariable Long playerId,
+      @RequestParam String status,
+      RedirectAttributes redirectAttributes) {
+    // Resolve by the canonical player name so status changes share the chat-command path.
+    playerStatusService.updateByName(
+        dashboardViewService.playerDetail(playerId)
+            .map(detail -> detail.status().playerName()).orElse(null), status, "WEB");
+    redirectAttributes.addFlashAttribute("notice", "ステータスを更新しました。");
+    return "redirect:/players/" + playerId;
   }
 
   @GetMapping("/players/{playerId}")

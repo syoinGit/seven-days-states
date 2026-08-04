@@ -11,6 +11,7 @@ import com.yuki.sevendays_states.repository.T_ServerMetricRepository;
 import com.yuki.sevendays_states.repository.T_SleeperTransactionRepository;
 import com.yuki.sevendays_states.repository.T_VehicleCurrentStateRepository;
 import com.yuki.sevendays_states.repository.T_VehiclePositionTransactionRepository;
+import com.yuki.sevendays_states.repository.T_PlayerStatusRepository;
 import com.yuki.sevendays_states.repository.T_WorldEventTransactionRepository;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -77,6 +78,9 @@ class GameLogImportServiceTests {
   @Autowired
   private T_VehiclePositionTransactionRepository vehiclePositionRepository;
 
+  @Autowired
+  private T_PlayerStatusRepository playerStatusRepository;
+
   @BeforeEach
   void deleteTransactions() {
     playerJoinRepository.deleteAll();
@@ -89,6 +93,7 @@ class GameLogImportServiceTests {
     serverMetricRepository.deleteAll();
     vehiclePositionRepository.deleteAll();
     vehicleCurrentStateRepository.deleteAll();
+    playerStatusRepository.deleteAll();
     worldEventRepository.deleteAll();
     playerRepository.deleteAll();
   }
@@ -259,6 +264,9 @@ class GameLogImportServiceTests {
         .extracting(row -> row.getMovementDistance())
         .usingComparatorForType(BigDecimal::compareTo, BigDecimal.class)
         .containsExactly(BigDecimal.ZERO, new BigDecimal("5.0"));
+    assertThat(playerPositionRepository.findAll())
+        .extracting(row -> row.getMovementMode())
+        .containsExactly("UNKNOWN", "ON_FOOT");
   }
 
   @Test
@@ -287,6 +295,70 @@ class GameLogImportServiceTests {
   }
 
   @Test
+  void attributesVehicleDistanceOnlyToFreshOnlinePlayerNearTheVehicle() throws Exception {
+    Path log = writeLog("""
+        2026-07-29T13:58:10 10775.000 INF Executing command 'lp' by Telnet from app
+        0. id=171, PlayerA, pos=(0.0, 38.0, 0.0), rot=(0.0, 0.0, 0.0), remote=True, health=100, deaths=0, zombies=0, players=0, score=0, level=1, pltfmid=Steam_a, crossid=EOS_a, ip=127.0.0.1, ping=5
+        Total of 1 in the game
+        2026-07-29T13:58:11 10776.000 INF 100000 VehicleManager write #0, id 2631, vehicleBicycle, (0.0, 38.0, 0.0), chunk 0, 0
+        2026-07-29T13:58:15 10780.000 INF Executing command 'lp' by Telnet from app
+        0. id=171, PlayerA, pos=(10.0, 38.0, 0.0), rot=(0.0, 0.0, 0.0), remote=True, health=100, deaths=0, zombies=0, players=0, score=0, level=1, pltfmid=Steam_a, crossid=EOS_a, ip=127.0.0.1, ping=5
+        Total of 1 in the game
+        2026-07-29T13:58:16 10781.000 INF 100001 VehicleManager write #0, id 2631, vehicleBicycle, (10.0, 38.0, 0.0), chunk 0, 0
+        """);
+
+    logImportService.importLogFile(log);
+
+    Long playerId = playerRepository.findAll().getFirst().getId();
+    assertThat(vehiclePositionRepository.findAll().getLast()).satisfies(row -> {
+      assertThat(row.isMovementValid()).isTrue();
+      assertThat(row.getAttributedPlayerId()).isEqualTo(playerId);
+      assertThat(row.getAttributionMethod()).isEqualTo("online_near_vehicle_position");
+      assertThat(row.getMovementDistance()).isEqualByComparingTo("10.0");
+    });
+  }
+
+  @Test
+  void doesNotAttributeVehicleMovementToLoggedOutOwner() throws Exception {
+    Path log = writeLog("""
+        2026-07-29T13:58:10 10775.000 INF Executing command 'lp' by Telnet from app
+        0. id=171, PlayerA, pos=(0.0, 38.0, 0.0), rot=(0.0, 0.0, 0.0), remote=True, health=100, deaths=0, zombies=0, players=0, score=0, level=1, pltfmid=Steam_a, crossid=EOS_a, ip=127.0.0.1, ping=5
+        Total of 1 in the game
+        2026-07-29T13:58:11 10776.000 INF VehicleManager loaded #0, id 2631, [type=EntityBicycle, name=vehicleBicycle, id=2631], (0.0, 38.0, 0.0), chunk 0, 0 (0, 0), owner EOS_a
+        2026-07-29T13:58:20 10785.000 INF Executing command 'lp' by Telnet from app
+        Total of 0 in the game
+        2026-07-29T13:58:21 10786.000 INF 100001 VehicleManager write #0, id 2631, vehicleBicycle, (10.0, 38.0, 0.0), chunk 0, 0
+        """);
+
+    logImportService.importLogFile(log);
+
+    assertThat(vehiclePositionRepository.findAll().getLast()).satisfies(row -> {
+      assertThat(row.getOwnerPlayerId()).isNotNull();
+      assertThat(row.isMovementValid()).isTrue();
+      assertThat(row.getAttributedPlayerId()).isNull();
+    });
+  }
+
+  @Test
+  void rejectsOutOfOrderVehicleMovementAndKeepsNewestCurrentPosition() throws Exception {
+    Path newer = writeLog("""
+        2026-07-29T14:00:00 10900.000 INF 100002 VehicleManager write #0, id 2631, vehicleBicycle, (100.0, 38.0, 0.0), chunk 6, 0
+        """);
+    logImportService.importLogFile(newer);
+    Path older = writeLog("""
+        2026-07-29T13:59:00 10840.000 INF 100001 VehicleManager write #0, id 2631, vehicleBicycle, (0.0, 38.0, 0.0), chunk 0, 0
+        """);
+
+    logImportService.importLogFile(older);
+
+    assertThat(vehiclePositionRepository.findAll().getLast().isMovementValid()).isFalse();
+    assertThat(vehicleCurrentStateRepository.findById(2631)).hasValueSatisfying(row -> {
+      assertThat(row.getPositionX()).isEqualTo(100);
+      assertThat(row.getLastUpdated()).isEqualTo(java.time.OffsetDateTime.parse("2026-07-29T14:00:00Z"));
+    });
+  }
+
+  @Test
   void skipsServerMetricWithinIntervalAndStoresAfterInterval() throws Exception {
     Path log = writeLog("""
         2026-07-26T08:00:00 1000.000 INF Time: 10.00m FPS: 20.00 Heap: 1000.0MB Max: 1100.0MB Chunks: 10 CGO: 1 Ply: 1 Zom: 0 Ent: 1 (2) Items: 0 CO: 1 RSS: 2000.0MB
@@ -299,6 +371,22 @@ class GameLogImportServiceTests {
     assertThat(result.serverMetrics()).isEqualTo(2);
     assertThat(result.skippedServerMetrics()).isEqualTo(1);
     assertThat(serverMetricRepository.count()).isEqualTo(2);
+  }
+
+  @Test
+  void chatStatusCommandUpdatesPlayerStatus() throws Exception {
+    Path log = writeLog("""
+        2026-07-29T13:58:10 10775.000 INF PlayerSpawnedInWorld (reason: JoinMultiplayer, position: 0, 38, 0): EntityID=171, PltfmId='Steam_a', CrossId='EOS_a', OwnerID='Steam_a', PlayerName='PlayerA', ClientNumber='1'
+        2026-07-29T13:58:20 10785.000 INF Chat (Global): PlayerA: !飯
+        """);
+
+    logImportService.importLogFile(log);
+
+    Long playerId = playerRepository.findAll().getFirst().getId();
+    assertThat(playerStatusRepository.findById(playerId)).hasValueSatisfying(status -> {
+      assertThat(status.getStatus()).isEqualTo("EATING");
+      assertThat(status.getSource()).isEqualTo("CHAT");
+    });
   }
 
   @Test
