@@ -3,8 +3,10 @@ package com.yuki.sevendays_states.service;
 import com.yuki.sevendays_states.config.SevenDaysDataProperties;
 import com.yuki.sevendays_states.entity.M_Player;
 import com.yuki.sevendays_states.entity.T_PlayerStatus;
+import com.yuki.sevendays_states.entity.T_PlayerCurrentState;
 import com.yuki.sevendays_states.repository.M_PlayerRepository;
 import com.yuki.sevendays_states.repository.T_PlayerStatusRepository;
+import com.yuki.sevendays_states.repository.T_PlayerCurrentStateRepository;
 import java.time.OffsetDateTime;
 import java.util.Locale;
 import java.util.Map;
@@ -19,12 +21,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PlayerStatusService {
   private static final Map<String, String> LABELS = Map.of(
-      "ACTIVE", "活動中", "EATING", "ごはん中", "AFK", "AFK", "OUT", "外出", "SLEEPING", "就寝中");
+      "ACTIVE", "活動中", "EATING", "ごはん中", "AFK", "AFK", "OUT", "外出", "SLEEPING", "就寝中", "SOLO", "ソロ探索中");
 
   private final M_PlayerRepository playerRepository;
   private final T_PlayerStatusRepository statusRepository;
   private final SevenDaysTelnetCommandClient telnet;
   private final SevenDaysDataProperties properties;
+  private final T_PlayerCurrentStateRepository currentStateRepository;
 
   @Transactional
   public Optional<StatusChange> updateByName(String playerName, String requestedStatus, String source) {
@@ -37,6 +40,11 @@ public class PlayerStatusService {
     }
     Optional<M_Player> player = playerRepository.findFirstByPlayerNameOrderByLastSeenAtDesc(playerName);
     if (player.isEmpty()) {
+      return Optional.empty();
+    }
+    boolean online = currentStateRepository.findByPlayerId(player.get().getId()).stream()
+        .anyMatch(T_PlayerCurrentState::isOnline);
+    if (!online) {
       return Optional.empty();
     }
     T_PlayerStatus row = statusRepository.findById(player.get().getId()).orElseGet(T_PlayerStatus::new);
@@ -61,6 +69,7 @@ public class PlayerStatusService {
       case "!戻り", "!もどり", "!back" -> "ACTIVE";
       case "!寝る", "!ねる" -> "SLEEPING";
       case "!外出", "!そと" -> "OUT";
+      case "!ソロ", "!そろ", "!solo" -> "SOLO";
       default -> null;
     };
     return updateByName(playerName, status, "CHAT");
