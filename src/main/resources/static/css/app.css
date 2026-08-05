@@ -82,6 +82,7 @@ a { color: inherit; }
 }
 .brand b { display: block; font-size: 18px; letter-spacing: .18em; }
 .brand small { display: block; margin-top: 2px; color: var(--muted); font-size: 8px; letter-spacing: .18em; }
+.topbar-actions { display: flex; align-items: center; gap: 16px; }
 .top-status { display: flex; gap: 9px; align-items: center; color: var(--muted); font-size: 11px; letter-spacing: .12em; }
 .live-pulse, .status-dot { display: inline-block; border-radius: 50%; background: var(--good); box-shadow: 0 0 12px rgb(133 169 105 / 70%); }
 .live-pulse { width: 7px; height: 7px; }
@@ -169,22 +170,40 @@ a { color: inherit; }
 .feed-item.tone-combat { border-left-color: var(--danger); background: linear-gradient(90deg, rgb(199 78 60 / 10%), rgb(11 15 16 / 58%) 28%); }
 .feed-item.tone-exploration { border-left-color: #a678c2; background: linear-gradient(90deg, rgb(166 120 194 / 9%), rgb(11 15 16 / 58%) 28%); }
 .feed-item.tone-warning { border-left-color: var(--signal); background: linear-gradient(90deg, rgb(214 164 59 / 11%), rgb(11 15 16 / 58%) 28%); }
+.feed-item.tone-community { border-left-color: var(--cyan); background: linear-gradient(90deg, rgb(111 170 168 / 11%), rgb(11 15 16 / 58%) 28%); }
 .tone-movement .feed-avatar, .tone-movement .tag { color: #75afe6; border-color: rgb(81 143 203 / 52%); }
 .tone-login .feed-avatar, .tone-login .tag { color: var(--good); border-color: rgb(133 169 105 / 52%); }
 .tone-logout .feed-avatar, .tone-logout .tag { color: #7d878a; border-color: rgb(98 108 111 / 52%); }
 .tone-combat .feed-avatar, .tone-combat .tag { color: #dc6a59; border-color: rgb(199 78 60 / 55%); }
 .tone-exploration .feed-avatar, .tone-exploration .tag { color: #ba8dd4; border-color: rgb(166 120 194 / 50%); }
 .tone-warning .feed-avatar, .tone-warning .tag { color: var(--signal); border-color: rgb(214 164 59 / 55%); }
+.tone-community .feed-avatar, .tone-community .tag { color: var(--cyan); border-color: rgb(111 170 168 / 55%); }
 .feed-avatar { display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 auto; border: 1px solid #596365; color: var(--cyan); font-weight: 900; clip-path: polygon(0 0, 80% 0, 100% 20%, 100% 100%, 20% 100%, 0 80%); }
 .feed-body { min-width: 0; flex: 1; }
 .feed-body header { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .feed-body header strong { font-size: 14px; }
+.feed-actor { color: var(--cyan); font-size: 14px; font-weight: 900; text-decoration: none; }
+.feed-actor:hover { color: var(--text); }
 .feed-body time { margin-left: auto; color: var(--muted); font-family: monospace; font-size: 10px; }
 .feed-body p { margin: 9px 0 0; font-size: 15px; line-height: 1.55; }
 .feed-body p.event-message { white-space: pre-line; }
 .feed-body footer { display: flex; gap: 8px; margin-top: 10px; color: var(--muted); font-family: monospace; font-size: 10px; }
 .feed-body footer span { color: var(--cyan); }
 .tag { padding: 2px 6px; border: 1px solid rgb(111 170 168 / 34%); color: var(--cyan); font-family: monospace; font-size: 9px; }
+
+.timeline-notices { display: grid; gap: 8px; margin: 0 18px 12px; }
+.timeline-compose { margin: 0 18px 18px; border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); }
+.timeline-compose form { display: grid; gap: 10px; padding: 15px; }
+.timeline-compose label { display: flex; gap: 12px; align-items: flex-start; }
+.timeline-compose textarea { min-width: 0; min-height: 70px; flex: 1; padding: 11px 12px; border: 1px solid var(--line); border-radius: 0; outline: 0; color: var(--text); background: #0b0f10; font: inherit; line-height: 1.55; resize: vertical; }
+.timeline-compose textarea:focus { border-color: var(--cyan); box-shadow: 0 0 0 2px rgb(111 170 168 / 12%); }
+.timeline-compose-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+.timeline-compose-actions small { color: var(--muted); font-size: 9px; }
+.timeline-compose-actions button { padding: 8px 14px; border: 1px solid var(--cyan); color: #081011; background: var(--cyan); font: inherit; font-size: 10px; font-weight: 900; cursor: pointer; }
+.timeline-compose-actions button:hover { filter: brightness(1.12); }
+.timeline-login-prompt { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 0 18px 18px; padding: 11px 13px; border: 1px dashed var(--line); color: var(--muted); font-size: 10px; }
+.timeline-login-prompt a { color: var(--signal); font-weight: 900; white-space: nowrap; }
+.social-actions .like-button span, .social-actions .like-count span { color: inherit; }
 
 .status-sidebar { padding: 18px; }
 .side-module, .panel, .player-card, .metric-card, .leader-card, .vehicle-card { border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); }
@@ -237,28 +256,15 @@ a { color: inherit; }
 .auth-nav form { margin: 0; }
 .auth-nav > span { color: var(--muted); font-family: monospace; font-size: 10px; }
 .auth-nav .nav-button { font: inherit; cursor: pointer; }
-.auth-page { max-width: 680px; }
-.auth-panel { max-width: 620px; margin: 0 auto; }
+.auth-shell { min-height: calc(100vh - 70px); padding: 0 24px 60px; }
+.auth-shell .auth-page { width: min(100%, 760px); max-width: none; margin: 0 auto; }
+.auth-panel { width: 100%; max-width: none; margin: 0 auto; }
 .guest-login-block { margin: 0 20px 20px; padding: 17px; border-top: 1px solid var(--steel); background: rgb(111 170 168 / 6%); }
 .guest-login-block > p:not(.eyebrow) { margin: 8px 0 13px; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .guest-login-block form { margin: 0; }
 .guest-button { padding: 9px 13px; border: 1px solid var(--cyan); color: var(--cyan); background: transparent; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
 .guest-button:hover { color: var(--text); background: rgb(111 170 168 / 13%); }
-.community-page { max-width: 900px; }
-.community-compose { overflow: hidden; }
-.community-compose .ai-comment-form { padding: 18px; }
-.community-login-prompt { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 18px; }
-.community-login-prompt p { margin: 0; color: var(--muted); font-size: 12px; }
 .primary-link { display: inline-block; padding: 10px 14px; border: 1px solid var(--signal); color: var(--signal); font-size: 11px; font-weight: 900; text-decoration: none; }
-.social-feed { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
-.social-post { display: flex; gap: 13px; padding: 18px; border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); }
-.social-post-body { min-width: 0; flex: 1; }
-.social-post-body header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.social-post-body header a { color: var(--signal); font-size: 13px; font-weight: 900; text-decoration: none; }
-.social-post-body time { color: var(--muted); font-family: monospace; font-size: 9px; }
-.social-post-body > p { margin: 12px 0 15px; white-space: pre-line; font-size: 14px; line-height: 1.7; }
-.social-post-body footer { display: flex; align-items: center; min-height: 24px; }
-.social-post-body footer form { margin: 0; }
 .like-button, .like-count { padding: 5px 9px; border: 1px solid var(--line); color: var(--muted); background: transparent; font: inherit; font-size: 11px; cursor: pointer; }
 .like-button:hover, .like-button.liked { border-color: var(--danger); color: #df7767; background: rgb(199 78 60 / 9%); }
 .like-count { cursor: default; }
@@ -490,11 +496,16 @@ dd { margin: 4px 0 0; color: #c4c7c1; font-size: 11px; overflow-wrap: anywhere; 
 
 @media (max-width: 580px) {
   .topbar { padding: 10px 14px; }
+  .topbar-actions { gap: 8px; }
+  .auth-nav > span { display: none; }
   .brand small, .top-status b { display: none; }
   .feed-header { padding: 18px 15px; }
   .feed-header > span { display: none; }
   .feed-item { padding: 16px 14px; }
   .feed-body time { width: 100%; margin: 2px 0 0; }
+  .timeline-compose, .timeline-login-prompt { margin-right: 11px; margin-left: 11px; }
+  .timeline-login-prompt { align-items: flex-start; flex-direction: column; }
+  .auth-shell { padding-right: 11px; padding-left: 11px; }
   .status-sidebar { grid-template-columns: 1fr; }
   .status-sidebar .side-module:nth-child(2) { grid-row: auto; }
   .layout { width: min(100% - 22px, 1180px); padding-top: 16px; }

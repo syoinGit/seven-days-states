@@ -28,7 +28,7 @@ public class WebSecurityConfig {
             .anyRequest().permitAll())
         .formLogin(form -> form
             .loginPage("/login")
-            .defaultSuccessUrl("/community", true)
+            .defaultSuccessUrl("/", true)
             .permitAll())
         .logout(logout -> logout
             .logoutSuccessUrl("/")

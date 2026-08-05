@@ -1,8 +1,10 @@
 package com.yuki.sevendays_states.web;
 
+import com.yuki.sevendays_states.service.PlayerSocialService;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -26,10 +28,31 @@ class DashboardControllerTests {
   void dashboardReturnsViewAndModel() {
     ConcurrentModel model = new ConcurrentModel();
 
-    String viewName = controller.index(model);
+    String viewName = controller.index(model, null);
 
     assertThat(viewName).isEqualTo("dashboard");
-    assertThat(model).containsKey("dashboard");
+    assertThat(model).containsKeys("dashboard", "timeline");
+  }
+
+  @Test
+  void combinesPostsAndGameEventsInOneNewestFirstTimeline() {
+    DashboardViewService.TravelEntry event = new DashboardViewService.TravelEntry(
+        "2026-08-05 19:40:00", "KILL", "combat", "PlayerA", "討伐", "zombie",
+        "PlayerAがゾンビを討伐した", "荒野", "10, 20, 30");
+    var post = new PlayerSocialService.PostView(
+        1L, 10L, "PlayerB", "探索いってきます", "2026-08-05 19:41:00", 2, true, true);
+
+    List<DashboardController.TimelineItem> timeline = DashboardController.timeline(
+        List.of(event), List.of(post));
+
+    assertThat(timeline)
+        .extracting(DashboardController.TimelineItem::itemType)
+        .containsExactly("POST", "EVENT");
+  }
+
+  @Test
+  void oldCommunityRouteRedirectsToUnifiedTimeline() {
+    assertThat(controller.community()).isEqualTo("redirect:/#timeline");
   }
 
   @Test

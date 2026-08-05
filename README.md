@@ -32,8 +32,8 @@ WATCHPOINT turns collected server logs into a mechanical, wasteland-themed activ
 - Identifies players by stable external IDs, preferring EOS ID, then Steam ID.
 - Shows online players' activity statuses (活動中, ごはん中, AFK, 外出, 就寝中, ソロ探索中) from the web or in-game commands such as `!飯`, `!afk`, and `!ソロ`.
 - Sends status changes back to the game through the optional Telnet command client; offline players remain read-only and show their last known location.
-- Provides a small private community feed: authenticated players can post and like, while public visitors can browse.
-- Supports a read-only `VIEWER` guest login alongside `PLAYER` and `ADMIN` accounts; the home page and community feed remain publicly readable.
+- Mixes player posts into the adventure timeline: authenticated players can post and like alongside game events.
+- Supports a read-only `VIEWER` guest login alongside `PLAYER` and `ADMIN` accounts; the unified home timeline remains publicly readable.
 - Lets administrators issue login accounts and link each account to one game player; passwords are stored as BCrypt hashes.
 - Displays event timestamps in JST (`Asia/Tokyo`) as `yyyy-MM-dd HH:mm:ss`.
 
