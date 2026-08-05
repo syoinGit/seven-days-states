@@ -3,19 +3,18 @@ package com.yuki.sevendays_states.service;
 import com.yuki.sevendays_states.config.SevenDaysDataProperties;
 import com.yuki.sevendays_states.entity.T_WorldTimeObservation;
 import com.yuki.sevendays_states.repository.T_WorldTimeObservationRepository;
+import com.yuki.sevendays_states.util.Hashing;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -140,7 +139,7 @@ public class SevenDaysTelnetService {
   }
 
   private void saveWorldTime(WorldTime worldTime) {
-    String hash = sha256("telnet:gettime|" + worldTime.observedAt() + "|" + worldTime.rawResponse());
+    String hash = Hashing.sha256("telnet:gettime|" + worldTime.observedAt() + "|" + worldTime.rawResponse());
     if (worldTimeRepository.existsBySourceHash(hash)) {
       return;
     }
@@ -153,15 +152,6 @@ public class SevenDaysTelnetService {
     observation.setSourceHash(hash);
     observation.setRawResponse(worldTime.rawResponse());
     worldTimeRepository.save(observation);
-  }
-
-  private String sha256(String value) {
-    try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
-    } catch (Exception e) {
-      throw new IllegalStateException("SHA-256 cannot be calculated", e);
-    }
   }
 
   private void drainPrompt(BufferedReader reader) {

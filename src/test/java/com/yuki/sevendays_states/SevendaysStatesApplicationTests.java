@@ -44,6 +44,9 @@ class SevendaysStatesApplicationTests {
     assertThat(tableExists("M_PLAYER")).isTrue();
     assertThat(tableExists("T_PLAYER_STATE_SNAPSHOT")).isTrue();
     assertThat(tableExists("T_PLAYER_MARKER_SNAPSHOT")).isTrue();
+    assertThat(tableExists("M_WEB_ACCOUNT")).isTrue();
+    assertThat(tableExists("T_PLAYER_POST")).isTrue();
+    assertThat(tableExists("T_PLAYER_POST_LIKE")).isTrue();
     assertThat(tableExists("M_SOURCE_FILE")).isFalse();
     assertThat(tableExists("M_SERVER_COMMAND_PERMISSION")).isFalse();
     assertThat(tableExists("T_SAVE_FILE_SNAPSHOT")).isFalse();

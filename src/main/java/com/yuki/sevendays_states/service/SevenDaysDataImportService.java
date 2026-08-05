@@ -31,19 +31,19 @@ import com.yuki.sevendays_states.repository.M_WorldSpawnPointRepository;
 import com.yuki.sevendays_states.repository.T_ImportRunRepository;
 import com.yuki.sevendays_states.repository.T_PlayerMarkerSnapshotRepository;
 import com.yuki.sevendays_states.repository.T_PlayerStateSnapshotRepository;
+import com.yuki.sevendays_states.util.Hashing;
+import com.yuki.sevendays_states.util.PlayerIdentity;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -189,7 +189,7 @@ public class SevenDaysDataImportService {
           element.getAttribute("class"),
           element.getNodeName() + ":" + childIndex(element));
       String rawXml = xmlOf(element);
-      String sourceHash = sha256("game-config|" + configName + "|" + key + "|" + rawXml);
+      String sourceHash = Hashing.sha256("game-config|" + configName + "|" + key + "|" + rawXml);
       if (!gameConfigElementRepository.existsBySourceHash(sourceHash)) {
         M_GameConfigElement row = new M_GameConfigElement();
         row.setSourcePath(source.relativePath());
@@ -403,7 +403,7 @@ public class SevenDaysDataImportService {
         continue;
       }
       String name = decoration.getAttribute("name");
-      String hash = sha256("poi|" + worldName + "|" + nullToBlank(gameName) + "|" + name + "|"
+      String hash = Hashing.sha256("poi|" + worldName + "|" + nullToBlank(gameName) + "|" + name + "|"
           + decoration.getAttribute("position") + "|" + decoration.getAttribute("rotation"));
       if (worldPoiRepository.existsBySourceHash(hash)) {
         continue;
@@ -439,7 +439,7 @@ public class SevenDaysDataImportService {
       if (position == null || position.length < 3) {
         continue;
       }
-      String hash = sha256("spawn|" + worldName + "|" + spawnpoint.getAttribute("position") + "|"
+      String hash = Hashing.sha256("spawn|" + worldName + "|" + spawnpoint.getAttribute("position") + "|"
           + spawnpoint.getAttribute("rotation"));
       if (worldSpawnPointRepository.existsBySourceHash(hash)) {
         continue;
@@ -583,7 +583,7 @@ public class SevenDaysDataImportService {
       String gameName,
       LocalDateTime capturedAt,
       Counter counter) {
-    String hash = sha256("player-state|" + source.relativePath() + "|" + player.getPlayerKey() + "|"
+    String hash = Hashing.sha256("player-state|" + source.relativePath() + "|" + player.getPlayerKey() + "|"
         + worldName + "|" + gameName + "|" + element.getAttribute("lastlogin") + "|"
         + element.getAttribute("position"));
     if (playerStateSnapshotRepository.existsBySourceHash(hash)) {
@@ -698,7 +698,7 @@ public class SevenDaysDataImportService {
   }
 
   private void saveMarkerSnapshot(T_PlayerMarkerSnapshot snapshot, String sourceHash, String key, Counter counter) {
-    String hash = sha256("player-marker|" + sourceHash + "|" + key);
+    String hash = Hashing.sha256("player-marker|" + sourceHash + "|" + key);
     if (playerMarkerSnapshotRepository.existsBySourceHash(hash)) {
       return;
     }
@@ -712,7 +712,7 @@ public class SevenDaysDataImportService {
       String relative = root.toAbsolutePath().normalize().relativize(path.toAbsolutePath().normalize()).toString();
       long size = Files.size(path);
       Instant modified = Files.getLastModifiedTime(path).toInstant();
-      String hash = sha256(sourceArea + "|" + relative + "|" + size + "|" + modified.toEpochMilli());
+      String hash = Hashing.sha256(sourceArea + "|" + relative + "|" + size + "|" + modified.toEpochMilli());
       return new SourceReference(sourceArea, relative, path.toAbsolutePath().normalize(), size, toLocalDateTime(modified), hash);
     } catch (Exception e) {
       throw new IllegalStateException("source file cannot be read: " + path, e);
@@ -723,7 +723,7 @@ public class SevenDaysDataImportService {
     try {
       String relative = root.toAbsolutePath().normalize().relativize(path.toAbsolutePath().normalize()).toString();
       Instant modified = Files.getLastModifiedTime(path).toInstant();
-      String hash = sha256("directory|" + sourceArea + "|" + relative + "|" + modified.toEpochMilli());
+      String hash = Hashing.sha256("directory|" + sourceArea + "|" + relative + "|" + modified.toEpochMilli());
       return new SourceReference(sourceArea, relative, path.toAbsolutePath().normalize(), 0L, toLocalDateTime(modified), hash);
     } catch (Exception e) {
       throw new IllegalStateException("source directory cannot be read: " + path, e);
@@ -991,15 +991,6 @@ public class SevenDaysDataImportService {
 
   private LocalDateTime toLocalDateTime(Instant instant) {
     return LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
-  }
-
-  private String sha256(String value) {
-    try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
-    } catch (Exception e) {
-      throw new IllegalStateException("SHA-256 cannot be calculated", e);
-    }
   }
 
   private void flush(long value) {

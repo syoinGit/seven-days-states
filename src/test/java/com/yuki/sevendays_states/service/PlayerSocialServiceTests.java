@@ -1,0 +1,71 @@
+package com.yuki.sevendays_states.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.yuki.sevendays_states.entity.M_Player;
+import com.yuki.sevendays_states.entity.M_WebAccount;
+import com.yuki.sevendays_states.repository.M_PlayerRepository;
+import com.yuki.sevendays_states.repository.M_WebAccountRepository;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+
+@SpringBootTest(properties = {
+    "spring.datasource.url=jdbc:h2:mem:sevendays_states_social;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
+    "spring.datasource.driver-class-name=org.h2.Driver",
+    "spring.jpa.hibernate.ddl-auto=validate",
+    "spring.flyway.enabled=true",
+    "app.sevendays.import.startup-enabled=false"
+})
+class PlayerSocialServiceTests {
+
+  @Autowired
+  private PlayerSocialService socialService;
+
+  @Autowired
+  private M_PlayerRepository playerRepository;
+
+  @Autowired
+  private M_WebAccountRepository accountRepository;
+
+  private Authentication authentication;
+
+  @BeforeEach
+  void setUp() {
+    M_Player player = new M_Player();
+    player.setPlayerKey("EOS:social-player");
+    player.setPlatform("EOS");
+    player.setUserId("social-player");
+    player.setPlayerName("交流プレイヤー");
+    player = playerRepository.save(player);
+
+    M_WebAccount account = new M_WebAccount();
+    account.setLoginId("social-user");
+    account.setPasswordHash("hash");
+    account.setPlayerId(player.getId());
+    account.setRole("PLAYER");
+    account = accountRepository.save(account);
+    authentication = UsernamePasswordAuthenticationToken.authenticated(
+        account.getLoginId(), "", List.of());
+  }
+
+  @Test
+  void authenticatedPlayerCanPostAndToggleLike() {
+    assertThat(socialService.createPost(authentication, "荒野からこんにちは").success()).isTrue();
+    assertThat(socialService.feed(authentication)).singleElement()
+        .satisfies(post -> {
+          assertThat(post.playerName()).isEqualTo("交流プレイヤー");
+          assertThat(post.likeCount()).isZero();
+        });
+
+    Long postId = socialService.feed(authentication).getFirst().id();
+    assertThat(socialService.toggleLike(authentication, postId).success()).isTrue();
+    assertThat(socialService.feed(authentication).getFirst().likeCount()).isEqualTo(1);
+    assertThat(socialService.toggleLike(authentication, postId).success()).isTrue();
+    assertThat(socialService.feed(authentication).getFirst().likeCount()).isZero();
+  }
+}

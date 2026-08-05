@@ -19,15 +19,22 @@ WATCHPOINT turns collected server logs into a mechanical, wasteland-themed activ
 - Streams or imports Docker logs for JOIN, LEAVE, KILL, SLEEPER, XP, and server metric events.
 - Polls Telnet `lp` output once per minute to refresh the authoritative online player state.
 - Links vehicles to players from logged owner IDs or an unambiguous nearby fresh player position.
-- Tracks travel distance for each vehicle and player, including vehicle distance attributed to its owner.
+- Tracks travel distance for each vehicle and player, including verified vehicle distance attributed to its driver.
+- Attributes vehicle movement only when a fresh, verified driver position matches the vehicle; ambiguous movement is excluded from player totals.
+- Classifies player movement as on-foot, verified vehicle, or unknown instead of guessing from vehicle ownership alone.
 - Condenses the main activity feed to at most one player event per minute and moves blood moon alerts to the sidebar.
 - Provides dedicated player, server telemetry, combat, and vehicle pages.
 - Builds adventure rankings from kills, travel distance, vehicle distance, and completed login sessions.
 - Aggregates seven days of activity for charts and future AI-generated daily adventure journals.
 - Shows explored and unexplored world POIs inferred from player positions within 80 metres.
 - Ranks defeated enemy types, charts daily kills, and summarizes character XP growth.
-- Aggregates vehicle distance by owner and vehicle type while excluding unlinked vehicle noise.
+- Aggregates verified vehicle distance by driver and vehicle type while excluding unlinked vehicle noise.
 - Identifies players by stable external IDs, preferring EOS ID, then Steam ID.
+- Shows online players' activity statuses (活動中, ごはん中, AFK, 外出, 就寝中, ソロ探索中) from the web or in-game commands such as `!飯`, `!afk`, and `!ソロ`.
+- Sends status changes back to the game through the optional Telnet command client; offline players remain read-only and show their last known location.
+- Provides a small private community feed: authenticated players can post and like, while public visitors can browse.
+- Supports a read-only `VIEWER` guest login alongside `PLAYER` and `ADMIN` accounts; the home page and community feed remain publicly readable.
+- Lets administrators issue login accounts and link each account to one game player; passwords are stored as BCrypt hashes.
 - Displays event timestamps in JST (`Asia/Tokyo`) as `yyyy-MM-dd HH:mm:ss`.
 
 ## Repository Layout
@@ -50,6 +57,8 @@ WATCHPOINT turns collected server logs into a mechanical, wasteland-themed activ
 └── pom.xml
 ```
 
+Javaパッケージの責務と依存方向は [ARCHITECTURE.md](ARCHITECTURE.md) にまとめています。
+
 Runtime data under `7dtd/data`, `7dtd/game`, `7dtd/log`, `.env`, and built jars are intentionally ignored by Git.
 
 ## Configuration
@@ -70,10 +79,17 @@ SEVEN_DAYS_ROOT=7dtd
 SEVEN_DAYS_DOCKER_LOG_ENABLED=false
 SEVEN_DAYS_TELNET_ENABLED=false
 AI_COMMENT_EDITOR_KEY=replace-with-a-long-random-secret
+WATCHPOINT_BOOTSTRAP_LOGIN=admin
+WATCHPOINT_BOOTSTRAP_PASSWORD=replace-with-a-long-random-password
 ```
 
 `AI_COMMENT_EDITOR_KEY` protects diary publishing under `/maintenance/diaries`.
 If it is empty, daily generation data remains visible but the publishing form is disabled.
+
+`WATCHPOINT_BOOTSTRAP_LOGIN` and `WATCHPOINT_BOOTSTRAP_PASSWORD` create the first
+administrator account on startup when both are set. The password is immediately
+stored as a BCrypt hash; the plaintext value is only read from the environment.
+After logging in, use `/maintenance/accounts` to issue player accounts.
 
 Spring Boot does not automatically load `.env` when started directly, so export it before local execution.
 

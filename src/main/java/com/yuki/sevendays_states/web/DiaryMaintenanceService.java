@@ -1,10 +1,10 @@
 package com.yuki.sevendays_states.web;
 
 import com.yuki.sevendays_states.service.AiCommentService;
+import com.yuki.sevendays_states.util.DisplayTimeFormatter;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -18,7 +18,6 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DiaryMaintenanceService {
 
-  private static final ZoneId DISPLAY_ZONE = ZoneId.of("Asia/Tokyo");
   private static final Pattern BLOOD_MOON_DAY = Pattern.compile("(?i)\\bDay\\s+(\\d+)\\b");
 
   private final JdbcTemplate jdbcTemplate;
@@ -42,7 +41,7 @@ public class DiaryMaintenanceService {
         limit 10000
         """, (rs, rowNum) -> rs.getObject("occurred_at", OffsetDateTime.class));
     LinkedHashSet<LocalDate> dates = new LinkedHashSet<>();
-    timestamps.forEach(timestamp -> dates.add(timestamp.atZoneSameInstant(DISPLAY_ZONE).toLocalDate()));
+    timestamps.forEach(timestamp -> dates.add(timestamp.atZoneSameInstant(DisplayTimeFormatter.JST).toLocalDate()));
     aiCommentService.diaries().stream()
         .map(AiCommentService.AiCommentEntry::diaryDate)
         .filter(java.util.Objects::nonNull)
@@ -57,8 +56,8 @@ public class DiaryMaintenanceService {
   }
 
   public DiaryPacket packet(LocalDate date) {
-    OffsetDateTime from = date.atStartOfDay(DISPLAY_ZONE).toOffsetDateTime();
-    OffsetDateTime to = date.plusDays(1).atStartOfDay(DISPLAY_ZONE).toOffsetDateTime();
+    OffsetDateTime from = date.atStartOfDay(DisplayTimeFormatter.JST).toOffsetDateTime();
+    OffsetDateTime to = date.plusDays(1).atStartOfDay(DisplayTimeFormatter.JST).toOffsetDateTime();
     List<WorldClock> clocks = jdbcTemplate.query("""
         select game_day, game_hour, game_minute
         from t_world_time_observation

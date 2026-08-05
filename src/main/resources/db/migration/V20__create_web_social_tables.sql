@@ -1,0 +1,33 @@
+CREATE TABLE M_WEB_ACCOUNT (
+    id BIGSERIAL PRIMARY KEY,
+    login_id VARCHAR(80) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL DEFAULT 'PLAYER',
+    player_id BIGINT UNIQUE REFERENCES M_PLAYER(id),
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL
+);
+
+CREATE INDEX idx_m_web_account_player ON M_WEB_ACCOUNT(player_id);
+
+CREATE TABLE T_PLAYER_POST (
+    id BIGSERIAL PRIMARY KEY,
+    account_id BIGINT NOT NULL REFERENCES M_WEB_ACCOUNT(id) ON DELETE CASCADE,
+    player_id BIGINT NOT NULL REFERENCES M_PLAYER(id),
+    body VARCHAR(1000) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL
+);
+
+CREATE INDEX idx_t_player_post_created ON T_PLAYER_POST(created_at DESC, id DESC);
+CREATE INDEX idx_t_player_post_player ON T_PLAYER_POST(player_id, created_at DESC);
+
+CREATE TABLE T_PLAYER_POST_LIKE (
+    id BIGSERIAL PRIMARY KEY,
+    post_id BIGINT NOT NULL REFERENCES T_PLAYER_POST(id) ON DELETE CASCADE,
+    account_id BIGINT NOT NULL REFERENCES M_WEB_ACCOUNT(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    CONSTRAINT uq_t_player_post_like_post_account UNIQUE(post_id, account_id)
+);
+
+CREATE INDEX idx_t_player_post_like_post ON T_PLAYER_POST_LIKE(post_id);

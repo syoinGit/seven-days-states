@@ -1,8 +1,9 @@
-package com.yuki.sevendays_states.service;
+package com.yuki.sevendays_states.util;
 
 import java.util.ArrayList;
 import java.util.List;
 
+/** Builds stable player keys across EOS, Steam, and platform-specific log formats. */
 public final class PlayerIdentity {
 
   private PlayerIdentity() {
@@ -69,10 +70,9 @@ public final class PlayerIdentity {
     }
   }
 
-  @SafeVarargs
-  private static <T> T firstNonBlank(T... values) {
-    for (T value : values) {
-      if (value instanceof String string && !string.isBlank()) {
+  private static String firstNonBlank(String... values) {
+    for (String value : values) {
+      if (value != null && !value.isBlank()) {
         return value;
       }
     }

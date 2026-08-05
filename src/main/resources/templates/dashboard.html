@@ -12,6 +12,11 @@
     <span class="brand-mark">WP</span>
     <span><b>WATCHPOINT</b><small>WASTELAND ADVENTURE ARCHIVE</small></span>
   </a>
+  <div class="auth-nav">
+    <a class="nav-button" th:href="@{/community}">交流ログ</a>
+    <a th:if="${!loggedIn}" class="nav-button" th:href="@{/login}">ログイン</a>
+    <form th:if="${loggedIn}" method="post" th:action="@{/logout}"><button class="nav-button" type="submit">ログアウト</button></form>
+  </div>
   <div class="top-status">
     <span class="live-pulse"></span>
     <b th:text="${dashboard.serverState.playerCount + ' ONLINE'}">0 ONLINE</b>
@@ -88,7 +93,7 @@
           <span class="status-dot" th:classappend="${player.online == false} ? ' offline'"></span>
           <span class="pilot-info">
             <strong th:text="${player.playerName}">player</strong>
-            <small th:text="${player.online == false ? 'オフライン / 最終地点：' + player.poiName : (player.customStatus == 'EATING' ? '🍚 ごはん中' : (player.customStatus == 'AFK' ? '💤 AFK' : (player.customStatus == 'OUT' ? '🚗 外出' : (player.customStatus == 'SLEEPING' ? '🛏 就寝中' : (player.customStatus == 'SOLO' ? '🧭 ソロ探索中' : (player.customStatus == 'ACTIVE' ? '🟢 活動中' : player.poiName + ' を探索中'))))))}">探索中</small>
+            <small th:text="${player.statusSummary}">探索中</small>
             <small class="pilot-vitals">
               <span th:text="${player.health != null ? 'HP ' + player.health : 'HP --'}">HP --</span>
               <span th:if="${player.online and player.currentVehicle != null}" th:text="${' / ' + player.currentVehicle + 'で移動中'}">vehicle</span>

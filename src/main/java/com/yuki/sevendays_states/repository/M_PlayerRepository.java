@@ -12,6 +12,8 @@ public interface M_PlayerRepository extends JpaRepository<M_Player, Long> {
 
   Optional<M_Player> findFirstByPlayerNameOrderByLastSeenAtDesc(String playerName);
 
+  List<M_Player> findAllByOrderByPlayerNameAsc();
+
   List<M_Player> findByPlayerKeyInOrderByIdAsc(Collection<String> playerKeys);
 
   Optional<M_Player> findFirstByPlatformIgnoreCaseAndUserIdOrderByIdAsc(String platform, String userId);
