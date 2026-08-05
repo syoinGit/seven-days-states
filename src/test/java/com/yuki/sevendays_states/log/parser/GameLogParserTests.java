@@ -87,7 +87,7 @@ class GameLogParserTests {
 
   @Test
   void parsesSleeperSpawn() {
-    SleeperLogEvent event = new SleeperSpawnLogParser().parse(
+    SleeperLogEvent event = new SleeperLogParser().parse(
         "2026-07-26T08:24:51 1556.661 INF 1544.871 SleeperVolume -546, 55, -577: Spawning -538, 55, -570 (-34, -36), group 'sleeperHordeStageGS2', class zombieBoe, count 5")
         .orElseThrow();
 
@@ -102,7 +102,7 @@ class GameLogParserTests {
 
   @Test
   void parsesSleeperRestore() {
-    SleeperLogEvent event = new SleeperRestoreLogParser().parse(
+    SleeperLogEvent event = new SleeperLogParser().parse(
         "2026-07-26T08:21:24 1349.173 INF 1337.678 SleeperVolume -151, 38, -767: Restoring -144, 39, -765 (-9, -48) 'zombieSteveCrawler', count 0")
         .orElseThrow();
 

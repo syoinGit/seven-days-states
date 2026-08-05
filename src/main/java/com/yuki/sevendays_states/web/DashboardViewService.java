@@ -2,6 +2,8 @@ package com.yuki.sevendays_states.web;
 
 import com.yuki.sevendays_states.config.SevenDaysDataProperties;
 import com.yuki.sevendays_states.service.AiCommentService;
+import com.yuki.sevendays_states.service.PlayerStatusCatalog;
+import com.yuki.sevendays_states.util.DisplayTimeFormatter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
@@ -14,8 +16,8 @@ import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -1514,6 +1516,26 @@ public class DashboardViewService {
       Boolean online,
       String customStatus
   ) {
+
+    public String statusSummary() {
+      if (!Boolean.TRUE.equals(online)) {
+        return "オフライン / 最終地点：" + displayPoiName();
+      }
+      String customLabel = PlayerStatusCatalog.displayLabel(customStatus);
+      return customLabel == null ? displayPoiName() + " を探索中" : customLabel;
+    }
+
+    public String statusLabel() {
+      if (!Boolean.TRUE.equals(online)) {
+        return "オフライン";
+      }
+      String customLabel = PlayerStatusCatalog.displayLabel(customStatus);
+      return customLabel == null ? "オンライン" : customLabel;
+    }
+
+    private String displayPoiName() {
+      return poiName == null || poiName.isBlank() ? "最終地点不明" : poiName;
+    }
   }
 
   public record PlayerDetailView(

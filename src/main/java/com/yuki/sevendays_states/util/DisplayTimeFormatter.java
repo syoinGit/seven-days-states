@@ -1,4 +1,4 @@
-package com.yuki.sevendays_states.web;
+package com.yuki.sevendays_states.util;
 
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -6,10 +6,12 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
-public class DisplayTimeFormatter {
+/** Formats database timestamps consistently for the web UI and social feed. */
+public final class DisplayTimeFormatter {
 
-  static final ZoneId JST = ZoneId.of("Asia/Tokyo");
-  private static final DateTimeFormatter DISPLAY_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+  public static final ZoneId JST = ZoneId.of("Asia/Tokyo");
+  private static final DateTimeFormatter DISPLAY_FORMAT =
+      DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
   public String format(Object value) {
     if (value == null) {

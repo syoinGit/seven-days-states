@@ -1,18 +1,21 @@
 package com.yuki.sevendays_states.web;
 
 import com.yuki.sevendays_states.service.AiCommentService;
+import com.yuki.sevendays_states.service.CurrentWebAccountService;
+import com.yuki.sevendays_states.service.PlayerSocialService;
 import com.yuki.sevendays_states.service.PlayerStatusService;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @Controller
 @RequiredArgsConstructor
@@ -23,6 +26,8 @@ public class DashboardController {
   private final DiaryMaintenanceService diaryMaintenanceService;
   private final DiaryViewService diaryViewService;
   private final PlayerStatusService playerStatusService;
+  private final CurrentWebAccountService currentAccountService;
+  private final PlayerSocialService playerSocialService;
 
   @GetMapping("/")
   public String index(Model model) {
@@ -34,14 +39,40 @@ public class DashboardController {
   public String updateStatus(
       @PathVariable Long playerId,
       @RequestParam String status,
+      Authentication authentication,
       RedirectAttributes redirectAttributes) {
-    // Resolve by the canonical player name so status changes share the chat-command path.
-    var updated = playerStatusService.updateByName(
-        dashboardViewService.playerDetail(playerId)
-            .map(detail -> detail.status().playerName()).orElse(null), status, "WEB");
+    var updated = currentAccountService.current(authentication)
+        .filter(account -> playerId.equals(account.getPlayerId()))
+        .flatMap(account -> playerStatusService.updateByPlayerId(playerId, status, "WEB"));
     redirectAttributes.addFlashAttribute(updated.isPresent() ? "notice" : "error",
-        updated.isPresent() ? "ステータスを更新しました。" : "オンライン中のみステータスを変更できます。");
+        updated.isPresent() ? "ステータスを更新しました。" : "自分のオンライン中プレイヤーだけ更新できます。");
     return "redirect:/players/" + playerId;
+  }
+
+  @GetMapping("/community")
+  public String community(Model model, Authentication authentication) {
+    model.addAttribute("posts", playerSocialService.feed(authentication));
+    return "community";
+  }
+
+  @PostMapping("/posts")
+  public String createPost(
+      @RequestParam String body,
+      Authentication authentication,
+      RedirectAttributes redirectAttributes) {
+    var result = playerSocialService.createPost(authentication, body);
+    redirectAttributes.addFlashAttribute(result.success() ? "notice" : "error", result.message());
+    return "redirect:/community";
+  }
+
+  @PostMapping("/posts/{postId}/like")
+  public String toggleLike(
+      @PathVariable Long postId,
+      Authentication authentication,
+      RedirectAttributes redirectAttributes) {
+    var result = playerSocialService.toggleLike(authentication, postId);
+    redirectAttributes.addFlashAttribute(result.success() ? "notice" : "error", result.message());
+    return "redirect:/community";
   }
 
   @GetMapping("/players/{playerId}")

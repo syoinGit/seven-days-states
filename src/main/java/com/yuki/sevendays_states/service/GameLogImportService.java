@@ -29,14 +29,13 @@ import com.yuki.sevendays_states.log.parser.BloodMoonLogParser;
 import com.yuki.sevendays_states.log.parser.EntityKillLogParser;
 import com.yuki.sevendays_states.log.parser.GameLogLineParser;
 import com.yuki.sevendays_states.log.parser.LevelXpSummaryLogParser;
+import com.yuki.sevendays_states.log.parser.PlayerChatCommandParser;
+import com.yuki.sevendays_states.log.parser.PlayerDeathLogParser;
 import com.yuki.sevendays_states.log.parser.PlayerJoinLogParser;
 import com.yuki.sevendays_states.log.parser.PlayerLeaveLogParser;
-import com.yuki.sevendays_states.log.parser.PlayerDeathLogParser;
-import com.yuki.sevendays_states.log.parser.PlayerChatCommandParser;
 import com.yuki.sevendays_states.log.parser.PlayerListPositionLogParser;
 import com.yuki.sevendays_states.log.parser.ServerMetricLogParser;
-import com.yuki.sevendays_states.log.parser.SleeperRestoreLogParser;
-import com.yuki.sevendays_states.log.parser.SleeperSpawnLogParser;
+import com.yuki.sevendays_states.log.parser.SleeperLogParser;
 import com.yuki.sevendays_states.log.parser.VehicleLogParser;
 import com.yuki.sevendays_states.repository.M_PlayerRepository;
 import com.yuki.sevendays_states.repository.T_EntityKillTransactionRepository;
@@ -50,19 +49,19 @@ import com.yuki.sevendays_states.repository.T_SleeperTransactionRepository;
 import com.yuki.sevendays_states.repository.T_VehicleCurrentStateRepository;
 import com.yuki.sevendays_states.repository.T_VehiclePositionTransactionRepository;
 import com.yuki.sevendays_states.repository.T_WorldEventTransactionRepository;
+import com.yuki.sevendays_states.util.Hashing;
+import com.yuki.sevendays_states.util.PlayerIdentity;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -117,8 +116,7 @@ public class GameLogImportService {
   private final EntityKillLogParser entityKillParser = new EntityKillLogParser(lineParser);
   private final LevelXpSummaryLogParser levelXpSummaryParser = new LevelXpSummaryLogParser(lineParser);
   private final PlayerListPositionLogParser playerListPositionParser = new PlayerListPositionLogParser(lineParser);
-  private final SleeperSpawnLogParser sleeperSpawnParser = new SleeperSpawnLogParser(lineParser);
-  private final SleeperRestoreLogParser sleeperRestoreParser = new SleeperRestoreLogParser(lineParser);
+  private final SleeperLogParser sleeperParser = new SleeperLogParser(lineParser);
   private final ServerMetricLogParser serverMetricParser = new ServerMetricLogParser(lineParser);
   private final AirDropLogParser airDropParser = new AirDropLogParser(lineParser);
   private final AiDirectorLogParser aiDirectorParser = new AiDirectorLogParser(lineParser);
@@ -243,14 +241,9 @@ public class GameLogImportService {
       saveWorldEvent(sourceFile, playerDeath.get(), counter);
       return;
     }
-    Optional<SleeperLogEvent> sleeperSpawn = sleeperSpawnParser.parse(line);
-    if (sleeperSpawn.isPresent()) {
-      saveSleeper(sourceFile, sleeperSpawn.get(), context, counter);
-      return;
-    }
-    Optional<SleeperLogEvent> sleeperRestore = sleeperRestoreParser.parse(line);
-    if (sleeperRestore.isPresent()) {
-      saveSleeper(sourceFile, sleeperRestore.get(), context, counter);
+    Optional<SleeperLogEvent> sleeper = sleeperParser.parse(line);
+    if (sleeper.isPresent()) {
+      saveSleeper(sourceFile, sleeper.get(), context, counter);
       return;
     }
     Optional<WorldEventLogEvent> airDrop = airDropParser.parse(line);
@@ -1102,16 +1095,7 @@ public class GameLogImportService {
   }
 
   private String lineHash(String sourceFile, String occurredAt, String content) {
-    return sha256(sourceFile + "|" + occurredAt + "|" + content);
-  }
-
-  private String sha256(String value) {
-    try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
-    } catch (Exception e) {
-      throw new IllegalStateException("SHA-256 cannot be calculated", e);
-    }
+    return Hashing.sha256(sourceFile + "|" + occurredAt + "|" + content);
   }
 
   private GameLogImportResult emptyResult() {
