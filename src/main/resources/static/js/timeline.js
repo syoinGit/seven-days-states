@@ -1,4 +1,21 @@
 document.addEventListener("DOMContentLoaded", () => {
+  const refreshButton = document.querySelector("[data-refresh-page]");
+  if (refreshButton) {
+    refreshButton.addEventListener("click", () => window.location.reload());
+    window.setTimeout(() => {
+      refreshButton.classList.add("has-update");
+      refreshButton.innerHTML = '<span aria-hidden="true">↑</span> 新しい観測があります';
+    }, 60000);
+  }
+
+  const copyButton = document.querySelector("[data-copy-generation]");
+  if (copyButton) {
+    copyButton.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(document.querySelector("#generation-data").value);
+      copyButton.textContent = "コピー済み";
+    });
+  }
+
   document.querySelectorAll(".like-form").forEach((form) => {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();

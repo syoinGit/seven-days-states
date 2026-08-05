@@ -22,7 +22,7 @@ WATCHPOINT turns collected server logs into a mechanical, wasteland-themed activ
 - Tracks travel distance for each vehicle and player, including verified vehicle distance attributed to its driver.
 - Attributes vehicle movement only when a fresh, verified driver position matches the vehicle; ambiguous movement is excluded from player totals.
 - Classifies player movement as on-foot, verified vehicle, or unknown instead of guessing from vehicle ownership alone.
-- Condenses the main activity feed to at most one player event per minute and moves blood moon alerts to the sidebar.
+- Condenses the main activity feed to at most one player event per five-minute window and moves blood moon alerts to the sidebar.
 - Provides dedicated player, server telemetry, combat, and vehicle pages.
 - Builds adventure rankings from kills, travel distance, vehicle distance, and completed login sessions.
 - Aggregates seven days of activity for charts and future AI-generated daily adventure journals.
@@ -33,7 +33,8 @@ WATCHPOINT turns collected server logs into a mechanical, wasteland-themed activ
 - Shows online players' activity statuses (活動中, ごはん中, AFK, 外出, 就寝中, ソロ探索中) from the web or in-game commands such as `!飯`, `!afk`, and `!ソロ`.
 - Sends status changes back to the game through the optional Telnet command client; offline players remain read-only and show their last known location.
 - Mixes player posts into the adventure timeline: authenticated players can post and like alongside game events.
-- Supports a read-only `VIEWER` guest login alongside `PLAYER` and `ADMIN` accounts; the unified home timeline remains publicly readable.
+- Uses a public landing page, then requires authentication for the dashboard and all data pages.
+- Supports a read-only `VIEWER` guest login alongside `PLAYER` and `ADMIN` accounts; guest responses anonymize player names and external platform IDs, remove player-dossier links, and never expose mutation controls.
 - Lets administrators issue login accounts and link each account to one game player; passwords are stored as BCrypt hashes.
 - Displays event timestamps in JST (`Asia/Tokyo`) as `yyyy-MM-dd HH:mm:ss`.
 
@@ -90,6 +91,17 @@ If it is empty, daily generation data remains visible but the publishing form is
 administrator account on startup when both are set. The password is immediately
 stored as a BCrypt hash; the plaintext value is only read from the environment.
 After logging in, use `/maintenance/accounts` to issue player accounts.
+
+`SESSION_COOKIE_SECURE=true` is required when the site is served over HTTPS (the production
+value in `.env.example`). Keep `.env`, PostgreSQL, the 7DTD log/save directories, and the
+reverse-proxy access logs outside public storage. The application cannot protect data after a
+server, database, or proxy administrator has been compromised.
+
+The public landing page is `/`. `/dashboard`, `/server`, `/kills`, `/vehicles`, `/exploration`,
+and `/diaries` require either a player/admin login or the read-only guest login. The guest view
+is useful for a portfolio/demo, but only application responses are anonymized; database ports
+and the underlying database must remain private. Remove any old Nginx `auth_basic` rule only
+after HTTPS and the application login have been tested.
 
 Spring Boot does not automatically load `.env` when started directly, so export it before local execution.
 

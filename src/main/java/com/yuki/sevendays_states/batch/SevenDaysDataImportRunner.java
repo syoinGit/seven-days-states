@@ -23,7 +23,7 @@ public class SevenDaysDataImportRunner implements ApplicationRunner {
     if (!properties.importSettings().startupEnabled()) {
       return;
     }
-    log.info("7DTD startup import started. root={}", properties.root());
+    log.info("7DTD startup import started.");
     SevenDaysDataImportResult result = importService.importCurrentData();
     log.info("7DTD startup import finished. {}", result);
   }
@@ -33,7 +33,7 @@ public class SevenDaysDataImportRunner implements ApplicationRunner {
     if (!properties.importSettings().scheduledEnabled()) {
       return;
     }
-    log.info("7DTD scheduled import started. root={}", properties.root());
+    log.info("7DTD scheduled import started.");
     SevenDaysDataImportResult result = importService.importCurrentData();
     log.info("7DTD scheduled import finished. {}", result);
   }

@@ -75,7 +75,12 @@ class DashboardControllerTests {
 
   @Test
   void oldCommunityRouteRedirectsToUnifiedTimeline() {
-    assertThat(controller.community()).isEqualTo("redirect:/#timeline");
+    assertThat(controller.community()).isEqualTo("redirect:/dashboard#timeline");
+  }
+
+  @Test
+  void publicRootShowsLandingPage() {
+    assertThat(controller.landing(null)).isEqualTo("landing");
   }
 
   @Test

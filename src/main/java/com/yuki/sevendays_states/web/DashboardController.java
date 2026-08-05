@@ -43,6 +43,13 @@ public class DashboardController {
   private final PlayerSocialService playerSocialService;
 
   @GetMapping("/")
+  public String landing(Authentication authentication) {
+    return currentAccountService.current(authentication).isPresent()
+        ? "redirect:/dashboard"
+        : "landing";
+  }
+
+  @GetMapping("/dashboard")
   public String index(Model model, Authentication authentication) {
     DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
     model.addAttribute("dashboard", dashboard);
@@ -66,7 +73,7 @@ public class DashboardController {
 
   @GetMapping("/community")
   public String community() {
-    return "redirect:/#timeline";
+    return "redirect:/dashboard#timeline";
   }
 
   @PostMapping("/posts")
@@ -76,7 +83,7 @@ public class DashboardController {
       RedirectAttributes redirectAttributes) {
     var result = playerSocialService.createPost(authentication, body);
     redirectAttributes.addFlashAttribute(result.success() ? "notice" : "error", result.message());
-    return "redirect:/#timeline";
+    return "redirect:/dashboard#timeline";
   }
 
   @PostMapping("/posts/{postId}/like")
@@ -86,7 +93,7 @@ public class DashboardController {
       RedirectAttributes redirectAttributes) {
     var result = playerSocialService.toggleLike(authentication, postId);
     redirectAttributes.addFlashAttribute(result.success() ? "notice" : "error", result.message());
-    return "redirect:/#timeline";
+    return "redirect:/dashboard#timeline";
   }
 
   @PostMapping(value = "/posts/{postId}/like.json", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -104,7 +111,7 @@ public class DashboardController {
       RedirectAttributes redirectAttributes) {
     var result = playerSocialService.deletePost(authentication, postId);
     redirectAttributes.addFlashAttribute(result.success() ? "notice" : "error", result.message());
-    return "redirect:/#timeline";
+    return "redirect:/dashboard#timeline";
   }
 
   static List<TimelineItem> timeline(
@@ -159,7 +166,15 @@ public class DashboardController {
   }
 
   @GetMapping("/players/{playerId}")
-  public String player(@PathVariable Long playerId, Model model) {
+  public String player(
+      @PathVariable Long playerId,
+      Model model,
+      Authentication authentication) {
+    if (currentAccountService.current(authentication)
+        .map(account -> "VIEWER".equals(account.getRole()))
+        .orElse(false)) {
+      return "redirect:/dashboard";
+    }
     DashboardViewService.PlayerDetailView player = dashboardViewService.playerDetail(playerId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     model.addAttribute("player", player);

@@ -211,7 +211,7 @@ public class GameLogImportService {
         parseSingleLine(sourceFileName, parsedLine.get(), context, counter);
       } catch (RuntimeException e) {
         counter.malformedLines++;
-        log.debug("Malformed or unsupported 7DTD log line skipped: {}", rawLine, e);
+        log.debug("Malformed or unsupported 7DTD log line skipped.", e);
       }
     }
   }
