@@ -23,7 +23,9 @@ public class WebSecurityConfig {
                 "/diaries", "/diaries/**", "/server")
             .permitAll()
             .requestMatchers("/maintenance/**").hasRole("ADMIN")
-            .requestMatchers(HttpMethod.POST, "/players/*/status", "/posts", "/posts/*/like")
+            .requestMatchers(
+                HttpMethod.POST, "/players/*/status", "/posts", "/posts/*/like",
+                "/posts/*/like.json", "/posts/*/delete")
             .hasAnyRole("PLAYER", "ADMIN")
             .anyRequest().permitAll())
         .formLogin(form -> form

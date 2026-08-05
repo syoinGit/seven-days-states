@@ -6,7 +6,10 @@ import com.yuki.sevendays_states.entity.M_Player;
 import com.yuki.sevendays_states.entity.M_WebAccount;
 import com.yuki.sevendays_states.repository.M_PlayerRepository;
 import com.yuki.sevendays_states.repository.M_WebAccountRepository;
+import com.yuki.sevendays_states.repository.T_PlayerPostLikeRepository;
+import com.yuki.sevendays_states.repository.T_PlayerPostRepository;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,19 +35,26 @@ class PlayerSocialServiceTests {
   @Autowired
   private M_WebAccountRepository accountRepository;
 
+  @Autowired
+  private T_PlayerPostRepository postRepository;
+
+  @Autowired
+  private T_PlayerPostLikeRepository likeRepository;
+
   private Authentication authentication;
 
   @BeforeEach
   void setUp() {
+    String suffix = UUID.randomUUID().toString();
     M_Player player = new M_Player();
-    player.setPlayerKey("EOS:social-player");
+    player.setPlayerKey("EOS:social-player-" + suffix);
     player.setPlatform("EOS");
-    player.setUserId("social-player");
+    player.setUserId("social-player-" + suffix);
     player.setPlayerName("交流プレイヤー");
     player = playerRepository.save(player);
 
     M_WebAccount account = new M_WebAccount();
-    account.setLoginId("social-user");
+    account.setLoginId("social-user-" + suffix);
     account.setPasswordHash("hash");
     account.setPlayerId(player.getId());
     account.setRole("PLAYER");
@@ -67,5 +77,16 @@ class PlayerSocialServiceTests {
     assertThat(socialService.feed(authentication).getFirst().likeCount()).isEqualTo(1);
     assertThat(socialService.toggleLike(authentication, postId).success()).isTrue();
     assertThat(socialService.feed(authentication).getFirst().likeCount()).isZero();
+  }
+
+  @Test
+  void postOwnerCanDeletePostAndItsLikes() {
+    socialService.createPost(authentication, "削除する投稿");
+    Long postId = socialService.feed(authentication).getFirst().id();
+    socialService.toggleLike(authentication, postId);
+
+    assertThat(socialService.deletePost(authentication, postId).success()).isTrue();
+    assertThat(postRepository.existsById(postId)).isFalse();
+    assertThat(likeRepository.countByPostId(postId)).isZero();
   }
 }

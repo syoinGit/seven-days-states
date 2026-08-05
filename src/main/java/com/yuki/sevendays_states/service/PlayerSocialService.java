@@ -61,24 +61,42 @@ public class PlayerSocialService {
   }
 
   @Transactional
-  public ActionResult toggleLike(Authentication authentication, Long postId) {
+  public LikeResult toggleLike(Authentication authentication, Long postId) {
     Optional<M_WebAccount> account = currentAccountService.current(authentication);
     if (account.isEmpty()) {
-      return ActionResult.failure("いいねするにはログインしてください。");
+      return LikeResult.failure("いいねするにはログインしてください。");
     }
     if (postId == null || postRepository.findById(postId).isEmpty()) {
-      return ActionResult.failure("投稿が見つかりません。");
+      return LikeResult.failure("投稿が見つかりません。");
     }
     Optional<T_PlayerPostLike> existing = likeRepository.findByPostIdAndAccountId(postId, account.get().getId());
     if (existing.isPresent()) {
       likeRepository.delete(existing.get());
-      return ActionResult.success("いいねを取り消しました。");
+      return LikeResult.success("いいねを取り消しました。", false, likeRepository.countByPostId(postId));
     }
     T_PlayerPostLike like = new T_PlayerPostLike();
     like.setPostId(postId);
     like.setAccountId(account.get().getId());
     likeRepository.save(like);
-    return ActionResult.success("いいねしました。");
+    return LikeResult.success("いいねしました。", true, likeRepository.countByPostId(postId));
+  }
+
+  @Transactional
+  public ActionResult deletePost(Authentication authentication, Long postId) {
+    Optional<M_WebAccount> account = currentAccountService.current(authentication);
+    if (account.isEmpty()) {
+      return ActionResult.failure("投稿を削除するにはログインしてください。");
+    }
+    Optional<T_PlayerPost> post = postId == null ? Optional.empty() : postRepository.findById(postId);
+    if (post.isEmpty()) {
+      return ActionResult.failure("投稿が見つかりません。");
+    }
+    if (!account.get().getId().equals(post.get().getAccountId())) {
+      return ActionResult.failure("自分の投稿だけ削除できます。");
+    }
+    likeRepository.deleteAllByPostId(postId);
+    postRepository.delete(post.get());
+    return ActionResult.success("投稿を削除しました。");
   }
 
   private PostView toView(T_PlayerPost post, M_WebAccount current) {
@@ -111,6 +129,21 @@ public class PlayerSocialService {
 
     static ActionResult failure(String message) {
       return new ActionResult(false, message);
+    }
+  }
+
+  public record LikeResult(
+      boolean success,
+      String message,
+      boolean liked,
+      long likeCount) {
+
+    static LikeResult success(String message, boolean liked, long likeCount) {
+      return new LikeResult(true, message, liked, likeCount);
+    }
+
+    static LikeResult failure(String message) {
+      return new LikeResult(false, message, false, 0);
     }
   }
 }
