@@ -30,6 +30,7 @@ public class GuestAuthenticationService {
     if (guest == null) {
       return false;
     }
+    request.changeSessionId();
     Authentication authentication = UsernamePasswordAuthenticationToken.authenticated(
         guest.getLoginId(), null, List.of(new SimpleGrantedAuthority("ROLE_VIEWER")));
     SecurityContext context = SecurityContextHolder.createEmptyContext();

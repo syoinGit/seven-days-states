@@ -33,7 +33,7 @@ public class WebAccountController {
       redirectAttributes.addFlashAttribute("error", "ゲストログインを準備できませんでした。");
       return "redirect:/login";
     }
-    return "redirect:/#timeline";
+    return "redirect:/dashboard#timeline";
   }
 
   @GetMapping("/maintenance/accounts")

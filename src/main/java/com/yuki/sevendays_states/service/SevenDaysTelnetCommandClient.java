@@ -38,7 +38,7 @@ public class SevenDaysTelnetCommandClient {
       write(writer, command);
       return true;
     } catch (Exception e) {
-      log.warn("7DTD telnet command failed. command={}", command, e);
+      log.warn("7DTD telnet command failed.", e);
       return false;
     } finally {
       try {

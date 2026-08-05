@@ -6,7 +6,7 @@ can evolve independently.
 
 | Package | Responsibility |
 | --- | --- |
-| `config` | Spring configuration, application properties, and migration compatibility hooks |
+| `config` | Spring configuration, application properties, migration compatibility hooks, and the guest privacy boundary |
 | `batch` | Scheduled or startup runners that trigger imports and polling |
 | `entity` | JPA persistence models (`M_` master tables and `T_` transaction/state tables) |
 | `repository` | Spring Data repositories; database access stays behind this boundary where practical |
@@ -30,3 +30,12 @@ The import and dashboard services contain the SQL needed to build the current re
 models and are covered by integration tests. They are kept as cohesive application
 services for now; future extractions should move one query family at a time behind a
 small read-model component rather than splitting methods mechanically.
+
+## Web privacy boundary
+
+`WebSecurityConfig` is the authorization source of truth. `GuestPrivacyFilter` runs only after
+Spring Security has authenticated a `VIEWER` request, and delegates response rewriting to
+`GuestPrivacyService`. The service is a presentation safety net: it maps master player names to
+stable aliases, masks external platform identifiers, and removes player-dossier links. The
+controller still blocks guest dossier access and all guest mutations; templates must not be used
+as the only authorization mechanism.

@@ -23,7 +23,7 @@ public class SevenDaysLogImportRunner {
     if (!"file".equalsIgnoreCase(properties.mode()) || !properties.log().scheduledEnabled()) {
       return;
     }
-    log.info("7DTD log import started. logPath={}", properties.logPath());
+    log.info("7DTD log import started.");
     GameLogImportResult result = logImportService.importLogs();
     log.info("7DTD log import finished. {}", result);
   }
