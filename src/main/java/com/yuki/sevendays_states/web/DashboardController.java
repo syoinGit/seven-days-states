@@ -5,6 +5,9 @@ import com.yuki.sevendays_states.service.CurrentWebAccountService;
 import com.yuki.sevendays_states.service.PlayerSocialService;
 import com.yuki.sevendays_states.service.PlayerStatusService;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -30,8 +33,10 @@ public class DashboardController {
   private final PlayerSocialService playerSocialService;
 
   @GetMapping("/")
-  public String index(Model model) {
-    model.addAttribute("dashboard", dashboardViewService.dashboard());
+  public String index(Model model, Authentication authentication) {
+    DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
+    model.addAttribute("dashboard", dashboard);
+    model.addAttribute("timeline", timeline(dashboard.travelEntries(), playerSocialService.feed(authentication)));
     return "dashboard";
   }
 
@@ -50,9 +55,8 @@ public class DashboardController {
   }
 
   @GetMapping("/community")
-  public String community(Model model, Authentication authentication) {
-    model.addAttribute("posts", playerSocialService.feed(authentication));
-    return "community";
+  public String community() {
+    return "redirect:/#timeline";
   }
 
   @PostMapping("/posts")
@@ -62,7 +66,7 @@ public class DashboardController {
       RedirectAttributes redirectAttributes) {
     var result = playerSocialService.createPost(authentication, body);
     redirectAttributes.addFlashAttribute(result.success() ? "notice" : "error", result.message());
-    return "redirect:/community";
+    return "redirect:/#timeline";
   }
 
   @PostMapping("/posts/{postId}/like")
@@ -72,7 +76,19 @@ public class DashboardController {
       RedirectAttributes redirectAttributes) {
     var result = playerSocialService.toggleLike(authentication, postId);
     redirectAttributes.addFlashAttribute(result.success() ? "notice" : "error", result.message());
-    return "redirect:/community";
+    return "redirect:/#timeline";
+  }
+
+  static List<TimelineItem> timeline(
+      List<DashboardViewService.TravelEntry> events,
+      List<PlayerSocialService.PostView> posts) {
+    List<TimelineItem> timeline = new ArrayList<>(events.size() + posts.size());
+    events.stream().map(TimelineItem::event).forEach(timeline::add);
+    posts.stream().map(TimelineItem::post).forEach(timeline::add);
+    timeline.sort(Comparator.comparing(
+        TimelineItem::occurredAt,
+        Comparator.nullsLast(Comparator.reverseOrder())));
+    return List.copyOf(timeline);
   }
 
   @GetMapping("/players/{playerId}")
@@ -156,6 +172,32 @@ public class DashboardController {
       redirectAttributes.addFlashAttribute("draftTitle", title);
       redirectAttributes.addFlashAttribute("draftBody", body);
       return "redirect:/maintenance/diaries/" + date + "/edit";
+    }
+  }
+
+  public record TimelineItem(
+      String itemType,
+      Long postId,
+      Long playerId,
+      String actor,
+      String kind,
+      String occurredAt,
+      String message,
+      String coordinate,
+      String tone,
+      Long likeCount,
+      boolean likedByCurrentAccount) {
+
+    static TimelineItem event(DashboardViewService.TravelEntry event) {
+      return new TimelineItem(
+          "EVENT", null, null, event.actor(), event.kind(), event.occurredAt(),
+          event.message(), event.coordinate(), event.tone(), null, false);
+    }
+
+    static TimelineItem post(PlayerSocialService.PostView post) {
+      return new TimelineItem(
+          "POST", post.id(), post.playerId(), post.playerName(), "つぶやき", post.createdAt(),
+          post.body(), "", "community", post.likeCount(), post.likedByCurrentAccount());
     }
   }
 
