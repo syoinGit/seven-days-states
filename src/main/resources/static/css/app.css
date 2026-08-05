@@ -82,8 +82,6 @@ a { color: inherit; }
 }
 .brand b { display: block; font-size: 18px; letter-spacing: .18em; }
 .brand small { display: block; margin-top: 2px; color: var(--muted); font-size: 8px; letter-spacing: .18em; }
-.topbar-actions { display: flex; align-items: center; gap: 16px; }
-.top-status { display: flex; gap: 9px; align-items: center; color: var(--muted); font-size: 11px; letter-spacing: .12em; }
 .live-pulse, .status-dot { display: inline-block; border-radius: 50%; background: var(--good); box-shadow: 0 0 12px rgb(133 169 105 / 70%); }
 .live-pulse { width: 7px; height: 7px; }
 
@@ -204,6 +202,8 @@ a { color: inherit; }
 .timeline-login-prompt { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 0 18px 18px; padding: 11px 13px; border: 1px dashed var(--line); color: var(--muted); font-size: 10px; }
 .timeline-login-prompt a { color: var(--signal); font-weight: 900; white-space: nowrap; }
 .social-actions .like-button span, .social-actions .like-count span { color: inherit; }
+.social-actions { display: flex; align-items: center; gap: 8px; }
+.social-actions form { margin: 0; }
 
 .status-sidebar { padding: 18px; }
 .side-module, .panel, .player-card, .metric-card, .leader-card, .vehicle-card { border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); }
@@ -224,6 +224,7 @@ a { color: inherit; }
 .blood-alert > small { display: block; margin-top: 9px; color: var(--muted); font-size: 10px; }
 .module-head { display: flex; justify-content: space-between; align-items: center; }
 .module-head > b { color: var(--signal); font-size: 22px; }
+.module-head > .module-online { display: flex; align-items: center; gap: 7px; color: var(--muted); font-family: monospace; font-size: 10px; letter-spacing: .1em; white-space: nowrap; }
 .pilot-list { margin: 12px -15px -15px; }
 .pilot { display: flex; gap: 10px; align-items: center; padding: 11px 15px; border-top: 1px solid var(--steel); text-decoration: none; }
 .pilot:hover { background: var(--signal-soft); }
@@ -268,10 +269,14 @@ a { color: inherit; }
 .like-button, .like-count { padding: 5px 9px; border: 1px solid var(--line); color: var(--muted); background: transparent; font: inherit; font-size: 11px; cursor: pointer; }
 .like-button:hover, .like-button.liked { border-color: var(--danger); color: #df7767; background: rgb(199 78 60 / 9%); }
 .like-count { cursor: default; }
+.like-button[disabled] { cursor: wait; opacity: .65; }
+.delete-post-form { margin-left: auto !important; }
+.delete-post-button { padding: 5px 8px; border: 0; color: var(--muted); background: transparent; font: inherit; font-size: 9px; cursor: pointer; }
+.delete-post-button:hover { color: var(--danger); }
 .account-list { padding: 0 18px; }
 .account-row { display: grid; grid-template-columns: minmax(130px, .7fr) 80px minmax(130px, 1fr) 50px; gap: 12px; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--steel); font-size: 11px; }
 .account-row span, .account-row small { color: var(--muted); }
-.ai-comment-form select { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 0; color: var(--text); background: #0b0f10; font: inherit; }
+.ai-comment-form select { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 0; color: var(--text); background: #0b0f10; font: inherit; appearance: none; }
 
 .form-notice { margin: 0; padding: 12px 15px; border: 1px solid var(--line); font-size: 12px; }
 .form-notice.success { border-color: var(--good); color: var(--good); background: rgb(133 169 105 / 9%); }
@@ -496,9 +501,8 @@ dd { margin: 4px 0 0; color: #c4c7c1; font-size: 11px; overflow-wrap: anywhere; 
 
 @media (max-width: 580px) {
   .topbar { padding: 10px 14px; }
-  .topbar-actions { gap: 8px; }
   .auth-nav > span { display: none; }
-  .brand small, .top-status b { display: none; }
+  .brand small { display: none; }
   .feed-header { padding: 18px 15px; }
   .feed-header > span { display: none; }
   .feed-item { padding: 16px 14px; }
@@ -518,4 +522,6 @@ dd { margin: 4px 0 0; color: #c4c7c1; font-size: 11px; overflow-wrap: anywhere; 
   .player-card dl { grid-template-columns: 1fr; }
   .poi-cards { grid-template-columns: 1fr; }
   .diary-day-list, .diary-metrics { grid-template-columns: 1fr; }
+  .account-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .account-row span:nth-of-type(2), .account-row small { text-align: right; }
 }

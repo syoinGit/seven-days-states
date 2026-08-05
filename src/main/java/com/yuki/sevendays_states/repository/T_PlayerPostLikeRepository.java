@@ -9,4 +9,6 @@ public interface T_PlayerPostLikeRepository extends JpaRepository<T_PlayerPostLi
   long countByPostId(Long postId);
 
   Optional<T_PlayerPostLike> findByPostIdAndAccountId(Long postId, Long accountId);
+
+  void deleteAllByPostId(Long postId);
 }

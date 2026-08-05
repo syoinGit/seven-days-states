@@ -51,6 +51,29 @@ class DashboardControllerTests {
   }
 
   @Test
+  void samplesAtMostOneGameEventPerFiveMinuteWindowWithoutDroppingPosts() {
+    var firstEvent = travelEntry("2026-08-05 19:40:10", "PlayerA");
+    var sameWindowEvent = travelEntry("2026-08-05 19:44:59", "PlayerB");
+    var nextWindowEvent = travelEntry("2026-08-05 19:45:00", "PlayerC");
+    var post = new PlayerSocialService.PostView(
+        1L, 10L, "PlayerD", "投稿", "2026-08-05 19:42:00", 0, false, true);
+
+    List<DashboardController.TimelineItem> timeline = DashboardController.timeline(
+        List.of(firstEvent, sameWindowEvent, nextWindowEvent), List.of(post));
+
+    assertThat(timeline).filteredOn(item -> item.itemType().equals("EVENT")).hasSize(2);
+    assertThat(timeline).filteredOn(item -> item.itemType().equals("POST")).hasSize(1);
+    assertThat(DashboardController.sampledEvents(List.of(firstEvent, sameWindowEvent)))
+        .isEqualTo(DashboardController.sampledEvents(List.of(firstEvent, sameWindowEvent)));
+  }
+
+  private static DashboardViewService.TravelEntry travelEntry(String occurredAt, String actor) {
+    return new DashboardViewService.TravelEntry(
+        occurredAt, "KILL", "combat", actor, "討伐", "zombie",
+        actor + "がゾンビを討伐した", "荒野", "10, 20, 30");
+  }
+
+  @Test
   void oldCommunityRouteRedirectsToUnifiedTimeline() {
     assertThat(controller.community()).isEqualTo("redirect:/#timeline");
   }

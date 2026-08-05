@@ -5,11 +5,16 @@ import com.yuki.sevendays_states.service.CurrentWebAccountService;
 import com.yuki.sevendays_states.service.PlayerSocialService;
 import com.yuki.sevendays_states.service.PlayerStatusService;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -17,12 +22,17 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @Controller
 @RequiredArgsConstructor
 public class DashboardController {
+
+  private static final DateTimeFormatter TIMELINE_TIME =
+      DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+  private static final int EVENT_WINDOW_MINUTES = 5;
 
   private final DashboardViewService dashboardViewService;
   private final AiCommentService aiCommentService;
@@ -79,16 +89,73 @@ public class DashboardController {
     return "redirect:/#timeline";
   }
 
+  @PostMapping(value = "/posts/{postId}/like.json", produces = MediaType.APPLICATION_JSON_VALUE)
+  @ResponseBody
+  public PlayerSocialService.LikeResult toggleLikeJson(
+      @PathVariable Long postId,
+      Authentication authentication) {
+    return playerSocialService.toggleLike(authentication, postId);
+  }
+
+  @PostMapping("/posts/{postId}/delete")
+  public String deletePost(
+      @PathVariable Long postId,
+      Authentication authentication,
+      RedirectAttributes redirectAttributes) {
+    var result = playerSocialService.deletePost(authentication, postId);
+    redirectAttributes.addFlashAttribute(result.success() ? "notice" : "error", result.message());
+    return "redirect:/#timeline";
+  }
+
   static List<TimelineItem> timeline(
       List<DashboardViewService.TravelEntry> events,
       List<PlayerSocialService.PostView> posts) {
     List<TimelineItem> timeline = new ArrayList<>(events.size() + posts.size());
-    events.stream().map(TimelineItem::event).forEach(timeline::add);
+    sampledEvents(events).stream().map(TimelineItem::event).forEach(timeline::add);
     posts.stream().map(TimelineItem::post).forEach(timeline::add);
     timeline.sort(Comparator.comparing(
         TimelineItem::occurredAt,
         Comparator.nullsLast(Comparator.reverseOrder())));
     return List.copyOf(timeline);
+  }
+
+  /**
+   * Keeps the public feed readable when the game emits many events at once. Each five-minute
+   * window contributes one stable pseudo-random event, while player-authored posts are never
+   * sampled. Stability prevents the feed from changing merely because the page was refreshed.
+   */
+  static List<DashboardViewService.TravelEntry> sampledEvents(
+      List<DashboardViewService.TravelEntry> events) {
+    Map<LocalDateTime, DashboardViewService.TravelEntry> selected = new LinkedHashMap<>();
+    for (DashboardViewService.TravelEntry event : events) {
+      LocalDateTime occurredAt = parseTimelineTime(event.occurredAt());
+      if (occurredAt == null) {
+        selected.putIfAbsent(LocalDateTime.MIN.plusNanos(selected.size()), event);
+        continue;
+      }
+      LocalDateTime window = occurredAt
+          .withMinute((occurredAt.getMinute() / EVENT_WINDOW_MINUTES) * EVENT_WINDOW_MINUTES)
+          .withSecond(0)
+          .withNano(0);
+      selected.merge(window, event, (current, candidate) ->
+          eventSampleScore(window, candidate) > eventSampleScore(window, current)
+              ? candidate : current);
+    }
+    return List.copyOf(selected.values());
+  }
+
+  private static LocalDateTime parseTimelineTime(String value) {
+    try {
+      return value == null ? null : LocalDateTime.parse(value, TIMELINE_TIME);
+    } catch (RuntimeException ignored) {
+      return null;
+    }
+  }
+
+  private static int eventSampleScore(
+      LocalDateTime window,
+      DashboardViewService.TravelEntry event) {
+    return java.util.Objects.hash(window, event.actor(), event.kind(), event.occurredAt());
   }
 
   @GetMapping("/players/{playerId}")
@@ -186,18 +253,19 @@ public class DashboardController {
       String coordinate,
       String tone,
       Long likeCount,
-      boolean likedByCurrentAccount) {
+      boolean likedByCurrentAccount,
+      boolean ownPost) {
 
     static TimelineItem event(DashboardViewService.TravelEntry event) {
       return new TimelineItem(
           "EVENT", null, null, event.actor(), event.kind(), event.occurredAt(),
-          event.message(), event.coordinate(), event.tone(), null, false);
+          event.message(), event.coordinate(), event.tone(), null, false, false);
     }
 
     static TimelineItem post(PlayerSocialService.PostView post) {
       return new TimelineItem(
           "POST", post.id(), post.playerId(), post.playerName(), "つぶやき", post.createdAt(),
-          post.body(), "", "community", post.likeCount(), post.likedByCurrentAccount());
+          post.body(), "", "community", post.likeCount(), post.likedByCurrentAccount(), post.own());
     }
   }
 

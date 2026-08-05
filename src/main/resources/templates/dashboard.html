@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>WATCHPOINT</title>
-  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <link rel="stylesheet" th:href="@{/css/app.css(v='20260805-2')}">
+  <script defer th:src="@{/js/timeline.js(v='20260805-1')}"></script>
 </head>
 <body>
 <header class="topbar">
@@ -12,16 +13,10 @@
     <span class="brand-mark">WP</span>
     <span><b>WATCHPOINT</b><small>WASTELAND ADVENTURE ARCHIVE</small></span>
   </a>
-  <div class="topbar-actions">
-    <div class="top-status">
-      <span class="live-pulse"></span>
-      <b th:text="${dashboard.serverState.playerCount + ' ONLINE'}">0 ONLINE</b>
-    </div>
-    <div class="auth-nav">
-      <span th:if="${loggedIn}" th:text="${currentAccountLogin}">survivor</span>
-      <a th:if="${!loggedIn}" class="nav-button" th:href="@{/login}">ログイン</a>
-      <form th:if="${loggedIn}" method="post" th:action="@{/logout}"><button class="nav-button" type="submit">ログアウト</button></form>
-    </div>
+  <div class="auth-nav">
+    <span th:if="${loggedIn}" th:text="${currentAccountLogin}">survivor</span>
+    <a th:if="${!loggedIn}" class="nav-button" th:href="@{/login}">ログイン</a>
+    <form th:if="${loggedIn}" method="post" th:action="@{/logout}"><button class="nav-button" type="submit">ログアウト</button></form>
   </div>
 </header>
 
@@ -84,13 +79,19 @@
           </header>
           <p class="event-message" th:text="${item.message}">荒野で何かが起きた</p>
           <footer class="social-actions" th:if="${item.itemType == 'POST'}">
-            <form method="post" th:action="@{/posts/{id}/like(id=${item.postId})}"
+            <form class="like-form" method="post" th:action="@{/posts/{id}/like(id=${item.postId})}"
+                  th:attr="data-like-url=@{/posts/{id}/like.json(id=${item.postId})}"
                   th:if="${loggedIn and !currentViewer}">
-              <button class="like-button" th:classappend="${item.likedByCurrentAccount} ? ' liked'" type="submit">
-                <span aria-hidden="true">♥</span> <span th:text="${item.likeCount}">0</span>
+              <button class="like-button" th:classappend="${item.likedByCurrentAccount} ? ' liked'"
+                      th:attr="aria-pressed=${item.likedByCurrentAccount}" type="submit">
+                <span aria-hidden="true">♥</span> <span class="like-value" th:text="${item.likeCount}">0</span>
               </button>
             </form>
             <span th:if="${!loggedIn or currentViewer}" class="like-count"><span aria-hidden="true">♥</span> <span th:text="${item.likeCount}">0</span></span>
+            <form class="delete-post-form" method="post" th:action="@{/posts/{id}/delete(id=${item.postId})}"
+                  th:if="${item.ownPost}">
+              <button class="delete-post-button" type="submit">削除</button>
+            </form>
           </footer>
           <footer th:if="${item.itemType == 'EVENT' and !#strings.isEmpty(item.coordinate)}">
             <span>LOC</span><b th:text="${item.coordinate}">0, 0, 0</b>
@@ -117,7 +118,7 @@
     <section class="side-module">
       <div class="module-head">
         <div><p class="module-code">PILOT STATUS</p><h2>プレイヤー</h2></div>
-        <b th:text="${dashboard.serverState.playerCount}">0</b>
+        <b class="module-online"><span class="live-pulse"></span><span th:text="${dashboard.serverState.playerCount + ' ONLINE'}">0 ONLINE</span></b>
       </div>
       <div class="pilot-list live-party">
         <a class="pilot" th:each="player : ${dashboard.playerStatuses}"
