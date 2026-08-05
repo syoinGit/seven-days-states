@@ -68,6 +68,27 @@ public class WebAccountAdminService {
     }
   }
 
+  @Transactional
+  public void changePassword(Long accountId, String password, String passwordConfirmation) {
+    if (accountId == null) {
+      throw new IllegalArgumentException("変更対象のアカウントを選択してください。");
+    }
+    M_WebAccount account = accountRepository.findById(accountId)
+        .orElseThrow(() -> new IllegalArgumentException("対象のアカウントが見つかりません。"));
+    if ("VIEWER".equals(account.getRole())) {
+      throw new IllegalArgumentException("ゲストアカウントのパスワードは変更できません。");
+    }
+    String normalizedPassword = password == null ? "" : password;
+    if (normalizedPassword.length() < 8) {
+      throw new IllegalArgumentException("パスワードは8文字以上で入力してください。");
+    }
+    if (!normalizedPassword.equals(passwordConfirmation)) {
+      throw new IllegalArgumentException("確認用パスワードが一致しません。");
+    }
+    account.setPasswordHash(passwordEncoder.encode(normalizedPassword));
+    accountRepository.save(account);
+  }
+
   public record AccountAdminView(List<AccountRow> accounts, List<M_Player> players) {
   }
 

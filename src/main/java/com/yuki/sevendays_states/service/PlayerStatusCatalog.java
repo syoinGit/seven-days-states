@@ -57,10 +57,10 @@ public final class PlayerStatusCatalog {
   }
 
   public static String label(String status) {
-    return LABELS.get(status);
+    return status == null ? null : LABELS.get(status);
   }
 
   public static String displayLabel(String status) {
-    return DISPLAY_LABELS.get(status);
+    return status == null ? null : DISPLAY_LABELS.get(status);
   }
 }

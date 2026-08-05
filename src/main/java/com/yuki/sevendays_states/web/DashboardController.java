@@ -134,7 +134,12 @@ public class DashboardController {
   static List<DashboardViewService.TravelEntry> sampledEvents(
       List<DashboardViewService.TravelEntry> events) {
     Map<LocalDateTime, DashboardViewService.TravelEntry> selected = new LinkedHashMap<>();
+    List<DashboardViewService.TravelEntry> alwaysVisible = new ArrayList<>();
     for (DashboardViewService.TravelEntry event : events) {
+      if (TimelineEventPolicy.isAlwaysVisible(event.kind())) {
+        alwaysVisible.add(event);
+        continue;
+      }
       LocalDateTime occurredAt = parseTimelineTime(event.occurredAt());
       if (occurredAt == null) {
         selected.putIfAbsent(LocalDateTime.MIN.plusNanos(selected.size()), event);
@@ -148,7 +153,11 @@ public class DashboardController {
           eventSampleScore(window, candidate) > eventSampleScore(window, current)
               ? candidate : current);
     }
-    return List.copyOf(selected.values());
+    List<DashboardViewService.TravelEntry> result = new ArrayList<>(
+        selected.size() + alwaysVisible.size());
+    result.addAll(selected.values());
+    result.addAll(alwaysVisible);
+    return List.copyOf(result);
   }
 
   private static LocalDateTime parseTimelineTime(String value) {

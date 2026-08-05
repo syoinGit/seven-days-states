@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>アカウント管理 | WATCHPOINT</title>
-  <link rel="stylesheet" th:href="@{/css/app.css(v='20260805-2')}">
+  <link rel="stylesheet" th:href="@{/css/app.css(v='20260805-4')}">
 </head>
 <body>
 <header class="topbar">
@@ -34,6 +34,15 @@
         </div>
         <p class="empty" th:if="${#lists.isEmpty(accountAdmin.accounts)}">アカウントがありません。</p>
       </div>
+    </article>
+    <article class="panel">
+      <div class="panel-head"><h2>パスワード変更</h2><small>ADMIN ONLY</small></div>
+      <form class="ai-comment-form" method="post" th:action="@{/maintenance/accounts/password}">
+        <label><span>変更対象</span><select name="accountId" required><option value="">アカウントを選択</option><option th:each="account : ${accountAdmin.accounts}" th:if="${account.role != 'VIEWER'}" th:value="${account.id}" th:text="${account.loginId + ' / ' + (account.playerName ?: account.role)}"></option></select></label>
+        <label><span>新しいパスワード</span><input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
+        <label><span>新しいパスワード（確認）</span><input name="passwordConfirmation" type="password" minlength="8" autocomplete="new-password" required></label>
+        <div class="form-actions"><small>8文字以上。保存時に再ハッシュ化します。</small><button type="submit">変更する</button></div>
+      </form>
     </article>
   </section>
 </main>

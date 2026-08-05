@@ -67,10 +67,34 @@ class DashboardControllerTests {
         .isEqualTo(DashboardController.sampledEvents(List.of(firstEvent, sameWindowEvent)));
   }
 
+  @Test
+  void alwaysKeepsLogoutAndHordeEventsOutsideFiveMinuteSampling() {
+    var regularA = travelEntry("2026-08-05 19:40:10", "PlayerA");
+    var regularB = travelEntry("2026-08-05 19:41:10", "PlayerB");
+    var logout = event("2026-08-05 19:42:10", "LEAVE", "PlayerA");
+    var horde = event("2026-08-05 19:43:10", "WANDERING_HORDE", "PlayerB");
+
+    List<DashboardViewService.TravelEntry> sampled = DashboardController.sampledEvents(
+        List.of(regularA, regularB, logout, horde));
+
+    assertThat(sampled).extracting(DashboardViewService.TravelEntry::kind)
+        .contains("LEAVE", "WANDERING_HORDE");
+    assertThat(sampled).filteredOn(item -> "KILL".equals(item.kind())).hasSize(1);
+  }
+
   private static DashboardViewService.TravelEntry travelEntry(String occurredAt, String actor) {
     return new DashboardViewService.TravelEntry(
         occurredAt, "KILL", "combat", actor, "討伐", "zombie",
         actor + "がゾンビを討伐した", "荒野", "10, 20, 30");
+  }
+
+  private static DashboardViewService.TravelEntry event(
+      String occurredAt,
+      String kind,
+      String actor) {
+    return new DashboardViewService.TravelEntry(
+        occurredAt, kind, "warning", actor, "発生", "",
+        actor + "の近くでイベントが発生した", "荒野", "10, 20, 30");
   }
 
   @Test
