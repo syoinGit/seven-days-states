@@ -6,7 +6,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record AiAnalysisProperties(
     int windowMinutes,
     int maxEvents,
-    String systemPromptResource
+    String systemPromptResource,
+    boolean bedrockEnabled,
+    String awsRegion,
+    String modelId,
+    int maxOutputTokens,
+    int scheduleMinutes,
+    long initialDelayMs
 ) {
 
   public AiAnalysisProperties {
@@ -15,5 +21,12 @@ public record AiAnalysisProperties(
     systemPromptResource = systemPromptResource == null || systemPromptResource.isBlank()
         ? "classpath:prompts/watchpoint-system-prompt.txt"
         : systemPromptResource;
+    awsRegion = awsRegion == null || awsRegion.isBlank() ? "ap-northeast-1" : awsRegion;
+    modelId = modelId == null || modelId.isBlank()
+        ? "jp.anthropic.claude-haiku-4-5-20251001-v1:0"
+        : modelId;
+    maxOutputTokens = maxOutputTokens <= 0 ? 400 : Math.min(maxOutputTokens, 1000);
+    scheduleMinutes = scheduleMinutes <= 0 ? 30 : Math.max(scheduleMinutes, 5);
+    initialDelayMs = initialDelayMs < 0 ? 60000 : initialDelayMs;
   }
 }

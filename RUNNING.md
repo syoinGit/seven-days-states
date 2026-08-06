@@ -47,6 +47,22 @@ set +a
 
 For EC2/systemd, set the same values through an `EnvironmentFile` or service environment.
 
+### Bedrock observations
+
+The integration is disabled by default. On an EC2 instance with an IAM role that can call
+`bedrock:InvokeModel`, enable it without adding static AWS credentials:
+
+```dotenv
+WATCHPOINT_AI_BEDROCK_ENABLED=true
+WATCHPOINT_AI_AWS_REGION=ap-northeast-1
+WATCHPOINT_AI_BEDROCK_MODEL_ID=jp.anthropic.claude-haiku-4-5-20251001-v1:0
+WATCHPOINT_AI_SCHEDULE_MINUTES=30
+```
+
+The AWS SDK uses `DefaultCredentialsProvider`, which obtains temporary credentials from the
+attached EC2 IAM role. Do not add access keys, secret keys, Anthropic keys, or Bedrock API keys
+to `.env`. An administrator can test one generation with `POST /maintenance/ai-analysis/publish`.
+
 ## EC2 layout
 
 The production directory is expected to be:

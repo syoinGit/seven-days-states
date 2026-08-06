@@ -26,6 +26,14 @@ public class AiCommentService {
         .map(this::toEntry);
   }
 
+  public Optional<AiCommentEntry> latestComment() {
+    return repository.findTopByOrderByPublishedAtDesc().map(this::toEntry);
+  }
+
+  public Optional<AiCommentEntry> latestBySourceType(String sourceType) {
+    return repository.findTopBySourceTypeOrderByPublishedAtDesc(sourceType).map(this::toEntry);
+  }
+
   public List<AiCommentEntry> diaries() {
     return repository.findTop100ByDiaryDateIsNotNullOrderByDiaryDateDescPublishedAtDesc().stream()
         .map(this::toEntry)
@@ -65,6 +73,28 @@ public class AiCommentService {
     comment.setDiaryDate(diaryDate);
     comment.setPublishedAt(OffsetDateTime.now(ZoneOffset.UTC));
     comment.setSourceType("MANUAL_BETA");
+    return toEntry(repository.save(comment));
+  }
+
+  @Transactional
+  public AiCommentEntry publishGenerated(String title, String body, String sourceType) {
+    String normalizedTitle = normalize(title);
+    String normalizedBody = normalize(body);
+    String normalizedSource = normalize(sourceType);
+    if (normalizedTitle.isBlank() || normalizedTitle.length() > 120) {
+      throw new IllegalArgumentException("タイトルは1〜120文字で入力してください。");
+    }
+    if (normalizedBody.isBlank() || normalizedBody.length() > 4000) {
+      throw new IllegalArgumentException("本文は1〜4000文字で入力してください。");
+    }
+    if (normalizedSource.isBlank() || normalizedSource.length() > 30) {
+      throw new IllegalArgumentException("生成元は1〜30文字で指定してください。");
+    }
+    T_AiComment comment = new T_AiComment();
+    comment.setTitle(normalizedTitle);
+    comment.setBody(normalizedBody);
+    comment.setPublishedAt(OffsetDateTime.now(ZoneOffset.UTC));
+    comment.setSourceType(normalizedSource);
     return toEntry(repository.save(comment));
   }
 
