@@ -86,6 +86,10 @@ WATCHPOINT_BOOTSTRAP_LOGIN=admin
 WATCHPOINT_BOOTSTRAP_PASSWORD=replace-with-a-long-random-password
 WATCHPOINT_AI_ANALYSIS_WINDOW_MINUTES=30
 WATCHPOINT_AI_ANALYSIS_MAX_EVENTS=60
+WATCHPOINT_AI_BEDROCK_ENABLED=false
+WATCHPOINT_AI_AWS_REGION=ap-northeast-1
+WATCHPOINT_AI_BEDROCK_MODEL_ID=jp.anthropic.claude-haiku-4-5-20251001-v1:0
+WATCHPOINT_AI_SCHEDULE_MINUTES=30
 ```
 
 `AI_COMMENT_EDITOR_KEY` protects diary publishing under `/maintenance/diaries`.
@@ -100,9 +104,11 @@ Administrators can inspect the generated AI request at
 `/maintenance/ai-analysis/payload`. It contains the WATCHPOINT system prompt, a
 strict JSON response contract, aggregate changes, survivor activity, localized
 POIs, and bounded evidence events. The payload deliberately excludes platform
-IDs, raw log lines, source paths, and exact coordinates. It does not call AWS;
-the future Bedrock integration should translate this boundary object to the
-Converse API and validate the returned `body` and `evidenceKeys` before publishing.
+IDs, raw log lines, source paths, and exact coordinates. When Bedrock generation
+is enabled, the application invokes Claude Haiku 4.5 through the Converse API,
+validates `body` and `evidenceKeys`, and saves the short observation only after
+validation succeeds. AWS credentials come exclusively from the SDK default
+credential chain, so EC2 uses its attached IAM role.
 
 `SESSION_COOKIE_SECURE=true` is required when the site is served over HTTPS (the production
 value in `.env.example`). Keep `.env`, PostgreSQL, the 7DTD log/save directories, and the

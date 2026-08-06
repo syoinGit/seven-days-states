@@ -17,7 +17,20 @@
 
   <properties>
     <java.version>21</java.version>
+    <aws.sdk.version>2.51.1</aws.sdk.version>
   </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>bom</artifactId>
+        <version>${aws.sdk.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <dependencies>
     <dependency>
@@ -57,6 +70,10 @@
       <groupId>commons-net</groupId>
       <artifactId>commons-net</artifactId>
       <version>3.11.1</version>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>bedrockruntime</artifactId>
     </dependency>
     <dependency>
       <groupId>org.projectlombok</groupId>

@@ -1460,9 +1460,9 @@ public class DashboardViewService {
       List<TravelEntry> travelEntries,
       List<VehicleStatus> vehicleStatuses,
       ServerState serverState) {
-    Optional<AiCommentService.AiCommentEntry> manualComment = aiCommentService.latestDiary();
-    if (manualComment.isPresent()) {
-      AiCommentService.AiCommentEntry comment = manualComment.get();
+    Optional<AiCommentService.AiCommentEntry> latestComment = aiCommentService.latestComment();
+    if (latestComment.isPresent()) {
+      AiCommentService.AiCommentEntry comment = latestComment.get();
       return new AiComment(
           comment.title(), DiaryViewService.excerpt(comment.body(), 180), comment.diaryDate());
     }

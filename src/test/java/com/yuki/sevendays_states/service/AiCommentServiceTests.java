@@ -62,4 +62,19 @@ class AiCommentServiceTests {
     assertThat(service.findByDiaryDate(date)).get()
         .satisfies(diary -> assertThat(diary.title()).isEqualTo("完成稿"));
   }
+
+  @Test
+  void publishesGeneratedObservationWithoutReplacingDailyDiary() {
+    service.publish(LocalDate.of(2026, 8, 2), "日記", "一日の記録", "test-editor-key");
+    service.publishGenerated("WATCHPOINT観測記録", "静かな探索が続いています。", "AWS_BEDROCK");
+
+    assertThat(repository.count()).isEqualTo(2);
+    assertThat(service.latestComment()).get().satisfies(comment -> {
+      assertThat(comment.diaryDate()).isNull();
+      assertThat(comment.body()).isEqualTo("静かな探索が続いています。");
+      assertThat(comment.sourceType()).isEqualTo("AWS_BEDROCK");
+    });
+    assertThat(service.latestDiary()).get()
+        .satisfies(comment -> assertThat(comment.title()).isEqualTo("日記"));
+  }
 }
