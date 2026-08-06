@@ -22,20 +22,22 @@ WATCHPOINT turns collected server logs into a mechanical, wasteland-themed activ
 - Tracks travel distance for each vehicle and player, including verified vehicle distance attributed to its driver.
 - Attributes vehicle movement only when a fresh, verified driver position matches the vehicle; ambiguous movement is excluded from player totals.
 - Classifies player movement as on-foot, verified vehicle, or unknown instead of guessing from vehicle ownership alone.
-- Condenses the main activity feed to at most one player event per five-minute window and moves blood moon alerts to the sidebar.
+- Condenses routine activity to one game event per five-minute window while always retaining logout and horde alerts; blood moon alerts live in the sidebar.
 - Provides dedicated player, server telemetry, combat, and vehicle pages.
 - Builds adventure rankings from kills, travel distance, vehicle distance, and completed login sessions.
 - Aggregates seven days of activity for charts and future AI-generated daily adventure journals.
+- Builds an administrator-only, provider-neutral WATCHPOINT analysis payload from the latest 30 minutes and the preceding comparison window, ready for an AWS Bedrock Converse adapter.
 - Shows explored and unexplored world POIs inferred from player positions within 80 metres.
 - Ranks defeated enemy types, charts daily kills, and summarizes character XP growth.
 - Aggregates verified vehicle distance by driver and vehicle type while excluding unlinked vehicle noise.
 - Identifies players by stable external IDs, preferring EOS ID, then Steam ID.
 - Shows online players' activity statuses (活動中, ごはん中, AFK, 外出, 就寝中, ソロ探索中) from the web or in-game commands such as `!飯`, `!afk`, and `!ソロ`.
+- Infers exploration when an online player remains within 20 metres for at least three minutes; otherwise the automatic status remains moving/online, while manual statuses take precedence.
 - Sends status changes back to the game through the optional Telnet command client; offline players remain read-only and show their last known location.
 - Mixes player posts into the adventure timeline: authenticated players can post and like alongside game events.
 - Uses a public landing page, then requires authentication for the dashboard and all data pages.
 - Supports a read-only `VIEWER` guest login alongside `PLAYER` and `ADMIN` accounts; guest responses anonymize player names and external platform IDs, remove player-dossier links, and never expose mutation controls.
-- Lets administrators issue login accounts and link each account to one game player; passwords are stored as BCrypt hashes.
+- Lets administrators issue login accounts, link each account to one game player, and reset non-guest passwords; passwords are stored as BCrypt hashes.
 - Displays event timestamps in JST (`Asia/Tokyo`) as `yyyy-MM-dd HH:mm:ss`.
 
 ## Repository Layout
@@ -82,6 +84,8 @@ SEVEN_DAYS_TELNET_ENABLED=false
 AI_COMMENT_EDITOR_KEY=replace-with-a-long-random-secret
 WATCHPOINT_BOOTSTRAP_LOGIN=admin
 WATCHPOINT_BOOTSTRAP_PASSWORD=replace-with-a-long-random-password
+WATCHPOINT_AI_ANALYSIS_WINDOW_MINUTES=30
+WATCHPOINT_AI_ANALYSIS_MAX_EVENTS=60
 ```
 
 `AI_COMMENT_EDITOR_KEY` protects diary publishing under `/maintenance/diaries`.
@@ -91,6 +95,14 @@ If it is empty, daily generation data remains visible but the publishing form is
 administrator account on startup when both are set. The password is immediately
 stored as a BCrypt hash; the plaintext value is only read from the environment.
 After logging in, use `/maintenance/accounts` to issue player accounts.
+
+Administrators can inspect the generated AI request at
+`/maintenance/ai-analysis/payload`. It contains the WATCHPOINT system prompt, a
+strict JSON response contract, aggregate changes, survivor activity, localized
+POIs, and bounded evidence events. The payload deliberately excludes platform
+IDs, raw log lines, source paths, and exact coordinates. It does not call AWS;
+the future Bedrock integration should translate this boundary object to the
+Converse API and validate the returned `body` and `evidenceKeys` before publishing.
 
 `SESSION_COOKIE_SECURE=true` is required when the site is served over HTTPS (the production
 value in `.env.example`). Keep `.env`, PostgreSQL, the 7DTD log/save directories, and the

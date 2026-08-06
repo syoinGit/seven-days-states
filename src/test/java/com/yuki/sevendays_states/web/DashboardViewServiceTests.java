@@ -49,6 +49,7 @@ class DashboardViewServiceTests {
     jdbcTemplate.update("delete from t_world_event_transaction");
     jdbcTemplate.update("delete from t_world_time_observation");
     jdbcTemplate.update("delete from t_ai_comment");
+    jdbcTemplate.update("delete from t_player_status");
     jdbcTemplate.update("delete from m_japanese_translation");
     jdbcTemplate.update("delete from m_world_poi");
     jdbcTemplate.update("delete from m_player");
@@ -495,6 +496,48 @@ class DashboardViewServiceTests {
     DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
 
     assertThat(dashboard.playerStatuses().getFirst().currentVehicle()).isEqualTo("vehicleMotorcycle");
+  }
+
+  @Test
+  void playerStatusInfersExplorationAfterThreeMinutesNearTheSamePosition() {
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    jdbcTemplate.update("""
+        insert into m_player (id, player_key, platform, user_id, player_name, last_seen_at)
+        values (1, 'EOS:eos-a', 'EOS', 'eos-a', 'StationaryPlayer', ?),
+               (2, 'EOS:eos-b', 'EOS', 'eos-b', 'MovingPlayer', ?)
+        """, Timestamp.from(now.toInstant()), Timestamp.from(now.toInstant()));
+    jdbcTemplate.update("""
+        insert into t_player_current_state
+        (player_entity_id, player_id, player_name, position_x, position_y, position_z, online, last_updated)
+        values (101, 1, 'StationaryPlayer', 105, 30, 100, true, ?),
+               (102, 2, 'MovingPlayer', 200, 30, 200, true, ?)
+        """, now, now);
+    jdbcTemplate.update("""
+        insert into t_player_position_transaction
+        (occurred_at, player_name, player_entity_id, player_id, position_x, position_y, position_z,
+         position_source_type, inference_method, movement_distance, movement_mode,
+         source_event_hash, source_file)
+        values (?, 'StationaryPlayer', 101, 1, 100, 30, 100, 'LP_COMMAND', 'direct', 0, 'ON_FOOT', 'stationary-old', 'telnet:lp'),
+               (?, 'StationaryPlayer', 101, 1, 108, 30, 101, 'LP_COMMAND', 'direct', 0, 'ON_FOOT', 'stationary-mid', 'telnet:lp'),
+               (?, 'StationaryPlayer', 101, 1, 105, 30, 100, 'LP_COMMAND', 'direct', 0, 'ON_FOOT', 'stationary-new', 'telnet:lp'),
+               (?, 'MovingPlayer', 102, 2, 190, 30, 190, 'LP_COMMAND', 'direct', 0, 'ON_FOOT', 'moving-old', 'telnet:lp'),
+               (?, 'MovingPlayer', 102, 2, 100, 30, 100, 'LP_COMMAND', 'direct', 0, 'ON_FOOT', 'moving-mid', 'telnet:lp'),
+               (?, 'MovingPlayer', 102, 2, 200, 30, 200, 'LP_COMMAND', 'direct', 0, 'ON_FOOT', 'moving-new', 'telnet:lp')
+        """, now.minusMinutes(4), now.minusMinutes(2), now,
+        now.minusMinutes(4), now.minusMinutes(2), now);
+
+    DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
+
+    DashboardViewService.PlayerStatus stationary = dashboard.playerStatuses().stream()
+        .filter(status -> "StationaryPlayer".equals(status.playerName()))
+        .findFirst().orElseThrow();
+    DashboardViewService.PlayerStatus moving = dashboard.playerStatuses().stream()
+        .filter(status -> "MovingPlayer".equals(status.playerName()))
+        .findFirst().orElseThrow();
+    assertThat(stationary.exploring()).isTrue();
+    assertThat(stationary.statusSummary()).contains("探索中");
+    assertThat(moving.exploring()).isFalse();
+    assertThat(moving.statusSummary()).contains("移動中");
   }
 
   @Test

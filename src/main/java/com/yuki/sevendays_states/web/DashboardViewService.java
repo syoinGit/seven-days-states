@@ -144,6 +144,31 @@ public class DashboardViewService {
           ) ranked_position
           where position_rank = 1
         ),
+        stationary_players as (
+          -- A player is exploring after remaining within 20m for at least three minutes.
+          -- The ten-minute lower bound tolerates missed polling samples without using stale sessions.
+          select lp.player_id
+          from latest_position lp
+          where lp.player_id is not null
+            and exists (
+              select 1
+              from t_player_position_transaction older
+              where older.player_id = lp.player_id
+                and older.occurred_at between lp.occurred_at - interval '10' minute
+                                              and lp.occurred_at - interval '3' minute
+                and ((older.position_x - lp.position_x) * (older.position_x - lp.position_x)
+                  + (older.position_z - lp.position_z) * (older.position_z - lp.position_z)) <= 400
+            )
+            and not exists (
+              select 1
+              from t_player_position_transaction recent
+              where recent.player_id = lp.player_id
+                and recent.occurred_at between lp.occurred_at - interval '3' minute
+                                               and lp.occurred_at
+                and ((recent.position_x - lp.position_x) * (recent.position_x - lp.position_x)
+                  + (recent.position_z - lp.position_z) * (recent.position_z - lp.position_z)) > 400
+            )
+        ),
         status_rows as (
           select p.id as player_id,
                  p.player_name,
@@ -181,6 +206,7 @@ public class DashboardViewService {
                    when c.online = true and c.last_updated >= ? then true
                    else false
                  end as online,
+                 case when stationary.player_id is not null then true else false end as exploring,
                  (
                    select poi.poi_name
                    from m_world_poi poi
@@ -210,10 +236,11 @@ public class DashboardViewService {
               or (c.player_id is null and c.state_player_key in (p.eos_key, p.steam_key, p.player_key))
           left join latest_position pp on pp.player_id = p.id
               or (pp.player_id is null and pp.player_name = p.player_name)
+          left join stationary_players stationary on stationary.player_id = p.id
         )
         select player_id, player_name, world_name, game_name, last_login, x, y, z,
                health, deaths, level, ping, travel_distance, vehicle_distance, current_vehicle,
-               online, poi_name, poi_category,
+               online, exploring, poi_name, poi_category,
                (select status from t_player_status ps where ps.player_id = sr.player_id) as custom_status
         from status_rows sr
         where card_rank = 1
@@ -236,6 +263,7 @@ public class DashboardViewService {
         rs.getBigDecimal("vehicle_distance"),
         rs.getString("current_vehicle"),
         booleanValue(rs, "online"),
+        booleanValue(rs, "exploring"),
         rs.getString("custom_status")), currentStateFreshAfter);
   }
 
@@ -303,6 +331,29 @@ public class DashboardViewService {
             where pp.player_id = ?
           ) ranked_position
           where position_rank = 1
+        ),
+        stationary_players as (
+          -- Keep the detail view on the same three-minute / 20m rule as the dashboard.
+          select lp.player_id
+          from latest_position lp
+          where exists (
+              select 1
+              from t_player_position_transaction older
+              where older.player_id = lp.player_id
+                and older.occurred_at between lp.occurred_at - interval '10' minute
+                                              and lp.occurred_at - interval '3' minute
+                and ((older.position_x - lp.position_x) * (older.position_x - lp.position_x)
+                  + (older.position_z - lp.position_z) * (older.position_z - lp.position_z)) <= 400
+            )
+            and not exists (
+              select 1
+              from t_player_position_transaction recent
+              where recent.player_id = lp.player_id
+                and recent.occurred_at between lp.occurred_at - interval '3' minute
+                                               and lp.occurred_at
+                and ((recent.position_x - lp.position_x) * (recent.position_x - lp.position_x)
+                  + (recent.position_z - lp.position_z) * (recent.position_z - lp.position_z)) > 400
+            )
         )
         select p.id as player_id,
                p.player_name,
@@ -340,6 +391,7 @@ public class DashboardViewService {
                  when c.online = true and c.last_updated >= ? then true
                  else false
                end as online,
+               case when stationary.player_id is not null then true else false end as exploring,
                (
                  select poi.poi_name
                  from m_world_poi poi
@@ -364,6 +416,7 @@ public class DashboardViewService {
         left join latest_current_state c on c.player_id = p.id
             or (c.player_id is null and c.state_player_key in (p.eos_key, p.steam_key, p.player_key))
         left join latest_position pp on pp.player_id = p.id
+        left join stationary_players stationary on stationary.player_id = p.id
         """, (rs, rowNum) -> new PlayerStatus(
         rs.getLong("player_id"),
         rs.getString("player_name"),
@@ -381,6 +434,7 @@ public class DashboardViewService {
         rs.getBigDecimal("vehicle_distance"),
         rs.getString("current_vehicle"),
         booleanValue(rs, "online"),
+        booleanValue(rs, "exploring"),
         rs.getString("custom_status")), playerId, playerId, playerId, currentStateFreshAfter);
     if (statuses.isEmpty()) {
       return Optional.empty();
@@ -677,17 +731,24 @@ public class DashboardViewService {
   private List<TravelEntry> condenseTimeline(List<TravelEntry> entries, int limit) {
     List<TravelEntry> condensed = new ArrayList<>();
     Set<String> playerMinuteBuckets = new HashSet<>();
+    int regularEventCount = 0;
     for (TravelEntry entry : entries) {
+      boolean alwaysVisible = TimelineEventPolicy.isAlwaysVisible(entry.kind());
+      if (!alwaysVisible && regularEventCount >= limit) {
+        continue;
+      }
       boolean playerEvent = entry.actor() != null && !entry.actor().isBlank() && !"誰か".equals(entry.actor());
       String minute = entry.occurredAt() == null || entry.occurredAt().length() < 16
           ? entry.occurredAt()
           : entry.occurredAt().substring(0, 16);
-      if (playerEvent && !playerMinuteBuckets.add(entry.actor() + "|" + minute)) {
+      if (!alwaysVisible
+          && playerEvent
+          && !playerMinuteBuckets.add(entry.actor() + "|" + minute)) {
         continue;
       }
       condensed.add(entry);
-      if (condensed.size() == limit) {
-        break;
+      if (!alwaysVisible) {
+        regularEventCount++;
       }
     }
     return List.copyOf(condensed);
@@ -1514,6 +1575,7 @@ public class DashboardViewService {
       BigDecimal vehicleDistance,
       String currentVehicle,
       Boolean online,
+      Boolean exploring,
       String customStatus
   ) {
 
@@ -1522,7 +1584,12 @@ public class DashboardViewService {
         return "オフライン / 最終地点：" + displayPoiName();
       }
       String customLabel = PlayerStatusCatalog.displayLabel(customStatus);
-      return customLabel == null ? displayPoiName() + " を探索中" : customLabel;
+      if (customLabel != null) {
+        return customLabel;
+      }
+      return Boolean.TRUE.equals(exploring)
+          ? displayPoiName() + " を探索中"
+          : displayPoiName() + " 付近を移動中";
     }
 
     public String statusLabel() {
@@ -1530,7 +1597,10 @@ public class DashboardViewService {
         return "オフライン";
       }
       String customLabel = PlayerStatusCatalog.displayLabel(customStatus);
-      return customLabel == null ? "オンライン" : customLabel;
+      if (customLabel != null) {
+        return customLabel;
+      }
+      return Boolean.TRUE.equals(exploring) ? "探索中" : "オンライン";
     }
 
     private String displayPoiName() {

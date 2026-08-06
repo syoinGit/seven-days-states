@@ -57,4 +57,19 @@ public class WebAccountController {
     }
     return "redirect:/maintenance/accounts";
   }
+
+  @PostMapping("/maintenance/accounts/password")
+  public String changePassword(
+      @RequestParam Long accountId,
+      @RequestParam String password,
+      @RequestParam String passwordConfirmation,
+      RedirectAttributes redirectAttributes) {
+    try {
+      accountAdminService.changePassword(accountId, password, passwordConfirmation);
+      redirectAttributes.addFlashAttribute("notice", "パスワードを変更しました。");
+    } catch (IllegalArgumentException e) {
+      redirectAttributes.addFlashAttribute("error", e.getMessage());
+    }
+    return "redirect:/maintenance/accounts";
+  }
 }
