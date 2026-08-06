@@ -26,6 +26,7 @@ WATCHPOINT turns collected server logs into a mechanical, wasteland-themed activ
 - Provides dedicated player, server telemetry, combat, and vehicle pages.
 - Builds adventure rankings from kills, travel distance, vehicle distance, and completed login sessions.
 - Aggregates seven days of activity for charts and future AI-generated daily adventure journals.
+- Builds an administrator-only, provider-neutral WATCHPOINT analysis payload from the latest 30 minutes and the preceding comparison window, ready for an AWS Bedrock Converse adapter.
 - Shows explored and unexplored world POIs inferred from player positions within 80 metres.
 - Ranks defeated enemy types, charts daily kills, and summarizes character XP growth.
 - Aggregates verified vehicle distance by driver and vehicle type while excluding unlinked vehicle noise.
@@ -83,6 +84,8 @@ SEVEN_DAYS_TELNET_ENABLED=false
 AI_COMMENT_EDITOR_KEY=replace-with-a-long-random-secret
 WATCHPOINT_BOOTSTRAP_LOGIN=admin
 WATCHPOINT_BOOTSTRAP_PASSWORD=replace-with-a-long-random-password
+WATCHPOINT_AI_ANALYSIS_WINDOW_MINUTES=30
+WATCHPOINT_AI_ANALYSIS_MAX_EVENTS=60
 ```
 
 `AI_COMMENT_EDITOR_KEY` protects diary publishing under `/maintenance/diaries`.
@@ -92,6 +95,14 @@ If it is empty, daily generation data remains visible but the publishing form is
 administrator account on startup when both are set. The password is immediately
 stored as a BCrypt hash; the plaintext value is only read from the environment.
 After logging in, use `/maintenance/accounts` to issue player accounts.
+
+Administrators can inspect the generated AI request at
+`/maintenance/ai-analysis/payload`. It contains the WATCHPOINT system prompt, a
+strict JSON response contract, aggregate changes, survivor activity, localized
+POIs, and bounded evidence events. The payload deliberately excludes platform
+IDs, raw log lines, source paths, and exact coordinates. It does not call AWS;
+the future Bedrock integration should translate this boundary object to the
+Converse API and validate the returned `body` and `evidenceKeys` before publishing.
 
 `SESSION_COOKIE_SECURE=true` is required when the site is served over HTTPS (the production
 value in `.env.example`). Keep `.env`, PostgreSQL, the 7DTD log/save directories, and the
