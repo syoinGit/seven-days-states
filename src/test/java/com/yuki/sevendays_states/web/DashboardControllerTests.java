@@ -1,9 +1,12 @@
 package com.yuki.sevendays_states.web;
 
+import com.yuki.sevendays_states.service.AiCommentService;
 import com.yuki.sevendays_states.service.PlayerSocialService;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,6 +51,22 @@ class DashboardControllerTests {
     assertThat(timeline)
         .extracting(DashboardController.TimelineItem::itemType)
         .containsExactly("POST", "EVENT");
+  }
+
+  @Test
+  void mixesBedrockCommentsIntoTimelineByPublishedTime() {
+    DashboardViewService.TravelEntry event = travelEntry("2026-08-05 19:40:00", "PlayerA");
+    var aiComment = new AiCommentService.AiCommentEntry(
+        2L, null, "WATCHPOINT観測記録", "探索範囲が広がっています。",
+        OffsetDateTime.of(2026, 8, 5, 10, 42, 0, 0, ZoneOffset.UTC), "AWS_BEDROCK");
+
+    List<DashboardController.TimelineItem> timeline = DashboardController.timeline(
+        List.of(event), List.of(), List.of(aiComment));
+
+    assertThat(timeline).extracting(DashboardController.TimelineItem::itemType)
+        .containsExactly("AI", "EVENT");
+    assertThat(timeline.getFirst().actor()).isEqualTo("WATCHPOINT");
+    assertThat(timeline.getFirst().tone()).isEqualTo("ai");
   }
 
   @Test

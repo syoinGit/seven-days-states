@@ -16,6 +16,8 @@ public interface T_AiCommentRepository extends JpaRepository<T_AiComment, Long> 
 
   Optional<T_AiComment> findTopBySourceTypeOrderByPublishedAtDesc(String sourceType);
 
+  List<T_AiComment> findTop20BySourceTypeOrderByPublishedAtDesc(String sourceType);
+
   List<T_AiComment> findTop100ByDiaryDateIsNotNullOrderByDiaryDateDescPublishedAtDesc();
 
 }

@@ -34,7 +34,7 @@ WATCHPOINT turns collected server logs into a mechanical, wasteland-themed activ
 - Shows online players' activity statuses (活動中, ごはん中, AFK, 外出, 就寝中, ソロ探索中) from the web or in-game commands such as `!飯`, `!afk`, and `!ソロ`.
 - Infers exploration when an online player remains within 20 metres for at least three minutes; otherwise the automatic status remains moving/online, while manual statuses take precedence.
 - Sends status changes back to the game through the optional Telnet command client; offline players remain read-only and show their last known location.
-- Mixes player posts into the adventure timeline: authenticated players can post and like alongside game events.
+- Mixes player posts and Bedrock-generated WATCHPOINT observations into the adventure timeline; daily journals live in the right sidebar so the central feed stays focused.
 - Uses a public landing page, then requires authentication for the dashboard and all data pages.
 - Supports a read-only `VIEWER` guest login alongside `PLAYER` and `ADMIN` accounts; guest responses anonymize player names and external platform IDs, remove player-dossier links, and never expose mutation controls.
 - Lets administrators issue login accounts, link each account to one game player, and reset non-guest passwords; passwords are stored as BCrypt hashes.
