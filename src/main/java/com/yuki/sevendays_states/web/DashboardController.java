@@ -4,6 +4,8 @@ import com.yuki.sevendays_states.service.AiCommentService;
 import com.yuki.sevendays_states.service.CurrentWebAccountService;
 import com.yuki.sevendays_states.service.PlayerSocialService;
 import com.yuki.sevendays_states.service.PlayerStatusService;
+import com.yuki.sevendays_states.service.WatchpointAiPublishingService;
+import com.yuki.sevendays_states.util.DisplayTimeFormatter;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -33,6 +35,7 @@ public class DashboardController {
   private static final DateTimeFormatter TIMELINE_TIME =
       DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
   private static final int EVENT_WINDOW_MINUTES = 5;
+  private static final DisplayTimeFormatter DISPLAY_TIME_FORMATTER = new DisplayTimeFormatter();
 
   private final DashboardViewService dashboardViewService;
   private final AiCommentService aiCommentService;
@@ -53,7 +56,10 @@ public class DashboardController {
   public String index(Model model, Authentication authentication) {
     DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
     model.addAttribute("dashboard", dashboard);
-    model.addAttribute("timeline", timeline(dashboard.travelEntries(), playerSocialService.feed(authentication)));
+    model.addAttribute("timeline", timeline(
+        dashboard.travelEntries(),
+        playerSocialService.feed(authentication),
+        aiCommentService.latestBySourceType(WatchpointAiPublishingService.SOURCE_TYPE, 20)));
     return "dashboard";
   }
 
@@ -117,9 +123,17 @@ public class DashboardController {
   static List<TimelineItem> timeline(
       List<DashboardViewService.TravelEntry> events,
       List<PlayerSocialService.PostView> posts) {
-    List<TimelineItem> timeline = new ArrayList<>(events.size() + posts.size());
+    return timeline(events, posts, List.of());
+  }
+
+  static List<TimelineItem> timeline(
+      List<DashboardViewService.TravelEntry> events,
+      List<PlayerSocialService.PostView> posts,
+      List<AiCommentService.AiCommentEntry> aiComments) {
+    List<TimelineItem> timeline = new ArrayList<>(events.size() + posts.size() + aiComments.size());
     sampledEvents(events).stream().map(TimelineItem::event).forEach(timeline::add);
     posts.stream().map(TimelineItem::post).forEach(timeline::add);
+    aiComments.stream().map(TimelineItem::aiComment).forEach(timeline::add);
     timeline.sort(Comparator.comparing(
         TimelineItem::occurredAt,
         Comparator.nullsLast(Comparator.reverseOrder())));
@@ -290,6 +304,12 @@ public class DashboardController {
       return new TimelineItem(
           "POST", post.id(), post.playerId(), post.playerName(), "つぶやき", post.createdAt(),
           post.body(), "", "community", post.likeCount(), post.likedByCurrentAccount(), post.own());
+    }
+
+    static TimelineItem aiComment(AiCommentService.AiCommentEntry comment) {
+      return new TimelineItem(
+          "AI", null, null, "WATCHPOINT", "観測AI", DISPLAY_TIME_FORMATTER.format(comment.publishedAt()),
+          comment.body(), "", "ai", null, false, false);
     }
   }
 

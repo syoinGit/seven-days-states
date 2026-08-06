@@ -718,11 +718,10 @@ class DashboardViewServiceTests {
   }
 
   @Test
-  void dashboardIncludesAiComment() {
+  void dashboardOmitsDailyDiaryCardWhenNoDiaryIsPublished() {
     DashboardViewService.DashboardView dashboard = dashboardViewService.dashboard();
 
-    assertThat(dashboard.aiComment().title()).isEqualTo("AI観測コメント");
-    assertThat(dashboard.aiComment().body()).isNotBlank();
+    assertThat(dashboard.aiComment()).isNull();
   }
 
   @Test

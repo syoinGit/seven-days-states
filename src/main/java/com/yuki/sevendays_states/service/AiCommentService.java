@@ -34,6 +34,13 @@ public class AiCommentService {
     return repository.findTopBySourceTypeOrderByPublishedAtDesc(sourceType).map(this::toEntry);
   }
 
+  public List<AiCommentEntry> latestBySourceType(String sourceType, int limit) {
+    return repository.findTop20BySourceTypeOrderByPublishedAtDesc(sourceType).stream()
+        .limit(Math.max(0, Math.min(limit, 20)))
+        .map(this::toEntry)
+        .toList();
+  }
+
   public List<AiCommentEntry> diaries() {
     return repository.findTop100ByDiaryDateIsNotNullOrderByDiaryDateDescPublishedAtDesc().stream()
         .map(this::toEntry)

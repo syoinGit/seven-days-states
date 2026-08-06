@@ -76,5 +76,8 @@ class AiCommentServiceTests {
     });
     assertThat(service.latestDiary()).get()
         .satisfies(comment -> assertThat(comment.title()).isEqualTo("日記"));
+    assertThat(service.latestBySourceType("AWS_BEDROCK", 20))
+        .singleElement()
+        .satisfies(comment -> assertThat(comment.body()).isEqualTo("静かな探索が続いています。"));
   }
 }
