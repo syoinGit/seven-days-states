@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>WATCHPOINT</title>
   <link rel="stylesheet" th:href="@{/css/app.css(v='20260805-2')}">
-  <script defer th:src="@{/js/timeline.js(v='20260805-1')}"></script>
+  <script defer th:src="@{/js/timeline.js(v='20260806-3')}"></script>
 </head>
 <body>
 <header class="topbar">
@@ -39,7 +39,7 @@
     <section class="ai-comment" aria-label="ai-comment">
       <span class="ai-index">COM-01</span>
       <div>
-        <p th:text="${dashboard.aiComment.title}">AI観測コメント</p>
+        <header class="ai-comment-head"><p th:text="${dashboard.aiComment.title}">AI観測コメント</p><span th:if="${dashboard.aiComment.sourceType == 'AWS_BEDROCK'}">BEDROCK LIVE</span><time th:if="${dashboard.aiComment.publishedAt != null}" th:text="${dashboard.aiComment.publishedAt}">time</time></header>
         <strong th:text="${dashboard.aiComment.body}">荒野は今日も平常運転です。</strong>
         <a class="ai-read-more" th:if="${dashboard.aiComment.diaryDate != null}"
            th:href="@{/diaries/{date}(date=${dashboard.aiComment.diaryDate})}">続きを読む <span aria-hidden="true">→</span></a>
@@ -67,7 +67,7 @@
 
     <ol class="feed" id="timeline">
       <li th:if="${#lists.isEmpty(timeline)}" class="empty">まだ冒険記録がありません。</li>
-      <li class="feed-item" th:each="item : ${timeline}"
+      <li class="feed-item" th:each="item : ${timeline}" data-timeline-item
           th:classappend="${' tone-' + item.tone}">
         <div class="feed-avatar" th:text="${#strings.substring(item.actor, 0, 1)}">W</div>
         <div class="feed-body">
@@ -101,6 +101,7 @@
         </div>
       </li>
     </ol>
+    <div class="timeline-loader" data-timeline-loader hidden><span class="live-pulse"></span><b>さらに観測記録を読み込む</b><small data-timeline-progress></small></div>
   </section>
 
   <aside class="status-sidebar">

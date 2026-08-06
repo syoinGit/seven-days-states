@@ -68,17 +68,18 @@ class DashboardControllerTests {
   }
 
   @Test
-  void alwaysKeepsLogoutAndHordeEventsOutsideFiveMinuteSampling() {
+  void alwaysKeepsLoginLogoutAndHordeEventsOutsideFiveMinuteSampling() {
     var regularA = travelEntry("2026-08-05 19:40:10", "PlayerA");
     var regularB = travelEntry("2026-08-05 19:41:10", "PlayerB");
+    var login = event("2026-08-05 19:41:30", "JOIN", "PlayerC");
     var logout = event("2026-08-05 19:42:10", "LEAVE", "PlayerA");
     var horde = event("2026-08-05 19:43:10", "WANDERING_HORDE", "PlayerB");
 
     List<DashboardViewService.TravelEntry> sampled = DashboardController.sampledEvents(
-        List.of(regularA, regularB, logout, horde));
+        List.of(regularA, regularB, login, logout, horde));
 
     assertThat(sampled).extracting(DashboardViewService.TravelEntry::kind)
-        .contains("LEAVE", "WANDERING_HORDE");
+        .contains("JOIN", "LEAVE", "WANDERING_HORDE");
     assertThat(sampled).filteredOn(item -> "KILL".equals(item.kind())).hasSize(1);
   }
 

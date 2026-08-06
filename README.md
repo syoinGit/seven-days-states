@@ -22,7 +22,7 @@ WATCHPOINT turns collected server logs into a mechanical, wasteland-themed activ
 - Tracks travel distance for each vehicle and player, including verified vehicle distance attributed to its driver.
 - Attributes vehicle movement only when a fresh, verified driver position matches the vehicle; ambiguous movement is excluded from player totals.
 - Classifies player movement as on-foot, verified vehicle, or unknown instead of guessing from vehicle ownership alone.
-- Condenses routine activity to one game event per five-minute window while always retaining logout and horde alerts; blood moon alerts live in the sidebar.
+- Condenses routine activity to one game event per five-minute window while always retaining login, logout, and horde alerts; up to 80 routine events are available through lightweight infinite reveal, the update button announces a new observation after five minutes, and blood moon alerts live in the sidebar.
 - Provides dedicated player, server telemetry, combat, and vehicle pages.
 - Builds adventure rankings from kills, travel distance, vehicle distance, and completed login sessions.
 - Aggregates seven days of activity for charts and future AI-generated daily adventure journals.
@@ -109,6 +109,11 @@ is enabled, the application invokes Claude Haiku 4.5 through the Converse API,
 validates `body` and `evidenceKeys`, and saves the short observation only after
 validation succeeds. AWS credentials come exclusively from the SDK default
 credential chain, so EC2 uses its attached IAM role.
+
+The administrator-only `/maintenance/ai-analysis/test` page previews the exact
+observation JSON and provides a CSRF-protected button for a real one-off Bedrock
+generation. A successful test is saved and immediately becomes the latest AI
+observation shown on the dashboard; failures are logged without saving a post.
 
 `SESSION_COOKIE_SECURE=true` is required when the site is served over HTTPS (the production
 value in `.env.example`). Keep `.env`, PostgreSQL, the 7DTD log/save directories, and the

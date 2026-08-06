@@ -1,11 +1,41 @@
 document.addEventListener("DOMContentLoaded", () => {
+  const timelineRefreshNoticeMs = 5 * 60 * 1000;
   const refreshButton = document.querySelector("[data-refresh-page]");
   if (refreshButton) {
     refreshButton.addEventListener("click", () => window.location.reload());
     window.setTimeout(() => {
       refreshButton.classList.add("has-update");
       refreshButton.innerHTML = '<span aria-hidden="true">↑</span> 新しい観測があります';
-    }, 60000);
+    }, timelineRefreshNoticeMs);
+  }
+
+  const timelineItems = Array.from(document.querySelectorAll("[data-timeline-item]"));
+  const timelineLoader = document.querySelector("[data-timeline-loader]");
+  const timelineProgress = document.querySelector("[data-timeline-progress]");
+  const initialTimelineItems = 18;
+  const timelinePageSize = 12;
+  let visibleTimelineItems = Math.min(initialTimelineItems, timelineItems.length);
+
+  const renderTimelinePage = () => {
+    visibleTimelineItems = Math.min(visibleTimelineItems, timelineItems.length);
+    timelineItems.forEach((item, index) => { item.hidden = index >= visibleTimelineItems; });
+    if (timelineProgress) timelineProgress.textContent = `${visibleTimelineItems} / ${timelineItems.length}`;
+    if (timelineLoader) timelineLoader.hidden = visibleTimelineItems >= timelineItems.length;
+  };
+
+  if (timelineLoader && timelineItems.length > initialTimelineItems) {
+    renderTimelinePage();
+    const loadMore = () => {
+      visibleTimelineItems += timelinePageSize;
+      renderTimelinePage();
+    };
+    timelineLoader.addEventListener("click", loadMore);
+    if ("IntersectionObserver" in window) {
+      const observer = new IntersectionObserver((entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) loadMore();
+      }, { rootMargin: "240px 0px" });
+      observer.observe(timelineLoader);
+    }
   }
 
   const copyButton = document.querySelector("[data-copy-generation]");

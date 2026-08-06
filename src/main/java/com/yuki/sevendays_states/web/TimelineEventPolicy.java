@@ -6,6 +6,7 @@ import java.util.Set;
 final class TimelineEventPolicy {
 
   private static final Set<String> ALWAYS_VISIBLE_KINDS = Set.of(
+      "JOIN",
       "LEAVE",
       "WANDERING_HORDE",
       "SCOUT_HORDE");
