@@ -22,6 +22,14 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class BedrockWatchpointClient {
 
+  private static final String RESPONSE_INSTRUCTION = """
+      次の観測リクエストに従って投稿を1件生成してください。
+      応答は説明やMarkdownコードフェンスを付けず、次の形のJSONオブジェクトだけにしてください。
+      {"body":"240文字以内の日本語本文","evidenceKeys":["根拠キー"]}
+
+      観測リクエスト:
+      """;
+
   private final BedrockRuntimeClient bedrockRuntimeClient;
   private final AiAnalysisProperties properties;
   private final ObjectMapper objectMapper;
@@ -33,7 +41,7 @@ public class BedrockWatchpointClient {
         .system(SystemContentBlock.fromText(analysisRequest.systemPrompt()))
         .messages(Message.builder()
             .role(ConversationRole.USER)
-            .content(ContentBlock.fromText(requestJson))
+            .content(ContentBlock.fromText(RESPONSE_INSTRUCTION + requestJson))
             .build())
         .inferenceConfig(InferenceConfiguration.builder()
             .maxTokens(properties.maxOutputTokens())
@@ -64,10 +72,46 @@ public class BedrockWatchpointClient {
       throw new BedrockGenerationException("Bedrockから空の応答が返されました。");
     }
     try {
-      return objectMapper.readValue(responseText, GeneratedPost.class);
+      return objectMapper.readValue(extractJsonObject(responseText), GeneratedPost.class);
     } catch (Exception exception) {
       throw new BedrockGenerationException("Bedrockの応答が要求したJSON形式ではありません。", exception);
     }
+  }
+
+  /**
+   * Claude may occasionally wrap an otherwise valid JSON response in a code fence or a short
+   * introductory sentence. Extract only the first complete JSON object; normal validation still
+   * rejects missing fields and fabricated evidence keys afterwards.
+   */
+  private String extractJsonObject(String responseText) {
+    int start = responseText.indexOf('{');
+    if (start < 0) {
+      throw new BedrockGenerationException("Bedrockの応答にJSONオブジェクトがありません。");
+    }
+    int depth = 0;
+    boolean inString = false;
+    boolean escaped = false;
+    for (int index = start; index < responseText.length(); index++) {
+      char character = responseText.charAt(index);
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (character == '\\') {
+          escaped = true;
+        } else if (character == '"') {
+          inString = false;
+        }
+        continue;
+      }
+      if (character == '"') {
+        inString = true;
+      } else if (character == '{') {
+        depth++;
+      } else if (character == '}' && --depth == 0) {
+        return responseText.substring(start, index + 1);
+      }
+    }
+    throw new BedrockGenerationException("Bedrockの応答に完全なJSONオブジェクトがありません。");
   }
 
   private void validate(GeneratedPost generated, AnalysisRequest request) {

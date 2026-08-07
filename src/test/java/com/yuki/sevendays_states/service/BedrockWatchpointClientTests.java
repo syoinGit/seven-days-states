@@ -70,6 +70,44 @@ class BedrockWatchpointClientTests {
         .hasMessageContaining("存在しない根拠キー");
   }
 
+  @Test
+  void acceptsJsonWrappedInMarkdownCodeFence() {
+    when(runtimeClient.converse(any(ConverseRequest.class))).thenReturn(response("""
+        ```json
+        {"body":"生存者の活動を観測しました。","evidenceKeys":["current-totals"]}
+        ```
+        """));
+
+    BedrockWatchpointClient.GeneratedPost generated = client.generate(request());
+
+    assertThat(generated.body()).isEqualTo("生存者の活動を観測しました。");
+    assertThat(generated.evidenceKeys()).containsExactly("current-totals");
+  }
+
+  @Test
+  void acceptsIntroductoryTextAndBracesInsideJsonString() {
+    when(runtimeClient.converse(any(ConverseRequest.class))).thenReturn(response(
+        "生成結果です。\n{\"body\":\"観測範囲は {静か} でした。\",\"evidenceKeys\":[\"world-context\"]}"));
+
+    BedrockWatchpointClient.GeneratedPost generated = client.generate(request());
+
+    assertThat(generated.body()).isEqualTo("観測範囲は {静か} でした。");
+  }
+
+  @Test
+  void sendsExplicitJsonOnlyInstruction() {
+    when(runtimeClient.converse(any(ConverseRequest.class))).thenReturn(response(
+        "{\"body\":\"観測しました。\",\"evidenceKeys\":[\"current-totals\"]}"));
+
+    client.generate(request());
+
+    ArgumentCaptor<ConverseRequest> captor = ArgumentCaptor.forClass(ConverseRequest.class);
+    verify(runtimeClient).converse(captor.capture());
+    String userMessage = captor.getValue().messages().getFirst().content().getFirst().text();
+    assertThat(userMessage).contains("JSONオブジェクトだけ");
+    assertThat(userMessage).contains("\"body\"");
+  }
+
   private ConverseResponse response(String text) {
     return ConverseResponse.builder()
         .output(ConverseOutput.fromMessage(Message.builder()
