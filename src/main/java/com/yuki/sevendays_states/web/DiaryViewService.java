@@ -20,15 +20,17 @@ public class DiaryViewService {
   public List<DiaryCard> archive() {
     return aiCommentService.diaries().stream()
         .map(entry -> new DiaryCard(
-            entry.diaryDate(), entry.title(), excerpt(entry.body(), ARCHIVE_EXCERPT_LENGTH),
-            displayTimeFormatter.format(entry.publishedAt())))
+            entry.diaryDate(), entry.title(),
+            entry.summary() == null || entry.summary().isBlank()
+                ? excerpt(entry.body(), ARCHIVE_EXCERPT_LENGTH) : entry.summary(),
+            entry.tags(), displayTimeFormatter.format(entry.publishedAt())))
         .toList();
   }
 
   public Optional<DiaryDetail> detail(LocalDate date) {
     return aiCommentService.findByDiaryDate(date)
         .map(entry -> new DiaryDetail(
-            entry.diaryDate(), entry.title(), entry.body(),
+            entry.diaryDate(), entry.title(), entry.body(), entry.summary(), entry.tags(),
             displayTimeFormatter.format(entry.publishedAt())));
   }
 
@@ -40,9 +42,16 @@ public class DiaryViewService {
     return normalized.substring(0, maxLength).stripTrailing() + "…";
   }
 
-  public record DiaryCard(LocalDate date, String title, String excerpt, String publishedAt) {
+  public record DiaryCard(
+      LocalDate date, String title, String excerpt, List<String> tags, String publishedAt) {
   }
 
-  public record DiaryDetail(LocalDate date, String title, String body, String publishedAt) {
+  public record DiaryDetail(
+      LocalDate date,
+      String title,
+      String body,
+      String summary,
+      List<String> tags,
+      String publishedAt) {
   }
 }

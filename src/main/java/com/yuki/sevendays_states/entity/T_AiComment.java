@@ -40,6 +40,12 @@ public class T_AiComment {
   @Column(name = "source_type", nullable = false, length = 30)
   private String sourceType;
 
+  @Column(name = "summary", length = 500)
+  private String summary;
+
+  @Column(name = "tags", length = 500)
+  private String tags;
+
   @Column(name = "created_at", nullable = false)
   private OffsetDateTime createdAt;
 

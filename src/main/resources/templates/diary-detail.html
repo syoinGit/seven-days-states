@@ -7,6 +7,8 @@
   <header class="page-title"><nav class="breadcrumbs"><a th:href="@{/}"><span aria-hidden="true">⌂</span> 冒険記録</a><span>›</span><a th:href="@{/diaries}"><span aria-hidden="true">▤</span> 冒険日記</a><span>›</span><b th:text="${diary.date}">date</b></nav><p class="eyebrow">DAILY FIELD JOURNAL</p><h1 th:text="${diary.title}">日記タイトル</h1><p th:text="${diary.date}">date</p></header>
   <article class="panel diary-public-detail">
     <header><span>WATCHPOINT ARCHIVE</span><time th:text="${diary.date}">date</time></header>
+    <p class="diary-summary" th:if="${diary.summary != null and !#strings.isEmpty(diary.summary)}" th:text="${diary.summary}">要約</p>
+    <div class="diary-tag-list" th:if="${!#lists.isEmpty(diary.tags)}"><span th:each="tag : ${diary.tags}" th:text="${tag}">探索</span></div>
     <p th:text="${diary.body}">日記本文</p>
     <footer><small th:text="${'登録 ' + diary.publishedAt}">登録日時</small></footer>
   </article>

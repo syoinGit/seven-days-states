@@ -10,6 +10,7 @@
       <header><time th:text="${entry.date}">2026-08-02</time><span>FIELD JOURNAL</span></header>
       <h2 th:text="${entry.title}">ある日の冒険記録</h2>
       <p th:text="${entry.excerpt}">日記の抜粋</p>
+      <div class="diary-tag-list" th:if="${!#lists.isEmpty(entry.tags)}"><span th:each="tag : ${entry.tags}" th:text="${tag}">探索</span></div>
       <footer><small th:text="${'登録 ' + entry.publishedAt}">登録日時</small><a th:href="@{/diaries/{date}(date=${entry.date})}">続きを読む <span aria-hidden="true">→</span></a></footer>
     </article>
     <p class="empty panel" th:if="${#lists.isEmpty(diaries)}">公開された冒険日記はまだありません。</p>

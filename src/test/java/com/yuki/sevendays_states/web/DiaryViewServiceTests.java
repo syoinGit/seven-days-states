@@ -58,6 +58,21 @@ class DiaryViewServiceTests {
     assertThat(service.detail(LocalDate.of(2026, 8, 3))).isEmpty();
   }
 
+  @Test
+  void archiveUsesStoredSummaryAndTagsWhenAvailable() {
+    LocalDate date = LocalDate.of(2026, 8, 4);
+    jdbcTemplate.update("""
+        insert into t_ai_comment
+          (diary_date, title, body, summary, tags, published_at, source_type)
+        values (?, '遠征', '長い本文', '短い要約', '探索,遠征', ?, 'AWS_BEDROCK_DIARY')
+        """, date, OffsetDateTime.now(ZoneOffset.UTC));
+
+    var entry = service.archive().getFirst();
+
+    assertThat(entry.excerpt()).isEqualTo("短い要約");
+    assertThat(entry.tags()).containsExactly("探索", "遠征");
+  }
+
   private void insert(LocalDate date, String title, String body) {
     jdbcTemplate.update("""
         insert into t_ai_comment (diary_date, title, body, published_at, source_type)
