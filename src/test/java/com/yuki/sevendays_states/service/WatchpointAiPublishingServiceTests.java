@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.inOrder;
 
 import com.yuki.sevendays_states.config.AiAnalysisProperties;
 import com.yuki.sevendays_states.web.WatchpointAiObservationService;
@@ -22,6 +23,7 @@ class WatchpointAiPublishingServiceTests {
     WatchpointAiObservationService observations = mock(WatchpointAiObservationService.class);
     BedrockWatchpointClient bedrock = mock(BedrockWatchpointClient.class);
     AiCommentService comments = mock(AiCommentService.class);
+    SevenDaysTelnetCommandClient telnet = mock(SevenDaysTelnetCommandClient.class);
     WatchpointAiObservationService.AnalysisRequest request = mock(
         WatchpointAiObservationService.AnalysisRequest.class);
     AiCommentService.AiCommentEntry saved = new AiCommentService.AiCommentEntry(
@@ -34,11 +36,15 @@ class WatchpointAiPublishingServiceTests {
         .thenReturn(saved);
 
     WatchpointAiPublishingService.PublishResult result =
-        new WatchpointAiPublishingService(properties, observations, bedrock, comments).publishNow();
+        new WatchpointAiPublishingService(properties, observations, bedrock, comments, telnet)
+            .publishNow();
 
     assertThat(result.status()).isEqualTo(WatchpointAiPublishingService.PublishStatus.PUBLISHED);
     assertThat(result.comment()).isEqualTo(saved);
     verify(comments).publishGenerated("WATCHPOINT観測記録", "観測本文", "AWS_BEDROCK");
+    var ordered = inOrder(comments, telnet);
+    ordered.verify(comments).publishGenerated("WATCHPOINT観測記録", "観測本文", "AWS_BEDROCK");
+    ordered.verify(telnet).broadcast("WATCHPOINT: 観測本文");
   }
 
   @Test
@@ -46,9 +52,10 @@ class WatchpointAiPublishingServiceTests {
     WatchpointAiObservationService observations = mock(WatchpointAiObservationService.class);
     BedrockWatchpointClient bedrock = mock(BedrockWatchpointClient.class);
     AiCommentService comments = mock(AiCommentService.class);
+    SevenDaysTelnetCommandClient telnet = mock(SevenDaysTelnetCommandClient.class);
 
     WatchpointAiPublishingService.PublishResult result =
-        new WatchpointAiPublishingService(properties(false), observations, bedrock, comments)
+        new WatchpointAiPublishingService(properties(false), observations, bedrock, comments, telnet)
             .publishIfDue();
 
     assertThat(result.status()).isEqualTo(WatchpointAiPublishingService.PublishStatus.DISABLED);
@@ -61,16 +68,18 @@ class WatchpointAiPublishingServiceTests {
     WatchpointAiObservationService observations = mock(WatchpointAiObservationService.class);
     BedrockWatchpointClient bedrock = mock(BedrockWatchpointClient.class);
     AiCommentService comments = mock(AiCommentService.class);
+    SevenDaysTelnetCommandClient telnet = mock(SevenDaysTelnetCommandClient.class);
     when(comments.latestBySourceType("AWS_BEDROCK")).thenReturn(Optional.of(
         new AiCommentService.AiCommentEntry(10L, null, "WATCHPOINT観測記録", "本文",
             OffsetDateTime.now(ZoneOffset.UTC), "AWS_BEDROCK")));
 
     WatchpointAiPublishingService.PublishResult result =
-        new WatchpointAiPublishingService(properties(true), observations, bedrock, comments)
+        new WatchpointAiPublishingService(properties(true), observations, bedrock, comments, telnet)
             .publishIfDue();
 
     assertThat(result.status()).isEqualTo(WatchpointAiPublishingService.PublishStatus.NOT_DUE);
     verify(bedrock, never()).generate(org.mockito.ArgumentMatchers.any());
+    verify(telnet, never()).broadcast(org.mockito.ArgumentMatchers.any());
   }
 
   private AiAnalysisProperties properties(boolean enabled) {

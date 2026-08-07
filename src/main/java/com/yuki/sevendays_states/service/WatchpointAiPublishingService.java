@@ -19,6 +19,7 @@ public class WatchpointAiPublishingService {
   private final WatchpointAiObservationService observationService;
   private final BedrockWatchpointClient bedrockClient;
   private final AiCommentService aiCommentService;
+  private final SevenDaysTelnetCommandClient telnetCommandClient;
 
   public PublishResult publishIfDue() {
     if (!properties.bedrockEnabled()) {
@@ -43,6 +44,7 @@ public class WatchpointAiPublishingService {
         bedrockClient.generate(observationService.buildRequest());
     AiCommentService.AiCommentEntry saved =
         aiCommentService.publishGenerated(TITLE, generated.body(), SOURCE_TYPE);
+    telnetCommandClient.broadcast("WATCHPOINT: " + saved.body());
     return new PublishResult(PublishStatus.PUBLISHED, saved);
   }
 

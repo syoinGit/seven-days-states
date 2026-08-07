@@ -64,7 +64,7 @@ public class PlayerStatusService {
     statusRepository.save(row);
     if (!status.equals(previous)) {
       String message = player.getPlayerName() + " は " + PlayerStatusCatalog.label(status) + " です";
-      telnet.send("say \"" + escape(message) + "\"");
+      telnet.broadcast(message);
       return Optional.of(new StatusChange(player, status, PlayerStatusCatalog.label(status)));
     }
     return Optional.empty();
@@ -73,10 +73,6 @@ public class PlayerStatusService {
   public Optional<StatusChange> updateFromChat(String playerName, String command) {
     String status = PlayerStatusCatalog.fromChatCommand(command);
     return updateByName(playerName, status, "CHAT");
-  }
-
-  private String escape(String value) {
-    return value.replace("\\", "\\\\").replace("\"", "'");
   }
 
   public record StatusChange(M_Player player, String status, String label) {
