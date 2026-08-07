@@ -17,6 +17,19 @@ import org.springframework.stereotype.Service;
 public class SevenDaysTelnetCommandClient {
   private final SevenDaysDataProperties properties;
 
+  /** Sends a server-wide chat message after removing command-breaking characters. */
+  public boolean broadcast(String message) {
+    if (message == null) {
+      return false;
+    }
+    String sanitized = message
+        .replaceAll("[\\r\\n\\p{Cntrl}]+", " ")
+        .replace("\\", "\\\\")
+        .replace("\"", "'")
+        .strip();
+    return !sanitized.isBlank() && send("say \"" + sanitized + "\"");
+  }
+
   public boolean send(String command) {
     if (command == null || command.isBlank()) {
       return false;
