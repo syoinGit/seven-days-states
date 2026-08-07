@@ -105,6 +105,48 @@ public class AiCommentService {
     return toEntry(repository.save(comment));
   }
 
+  @Transactional
+  public AiCommentEntry publishGeneratedDiary(
+      LocalDate diaryDate,
+      String title,
+      String summary,
+      List<String> tags,
+      String body) {
+    if (diaryDate == null) {
+      throw new IllegalArgumentException("日記の日付が必要です。");
+    }
+    String normalizedTitle = normalize(title);
+    String normalizedSummary = normalize(summary);
+    String normalizedBody = normalize(body);
+    String normalizedTags = tags == null ? "" : tags.stream()
+        .map(this::normalize)
+        .filter(tag -> !tag.isBlank())
+        .distinct()
+        .limit(8)
+        .collect(java.util.stream.Collectors.joining(","));
+    if (normalizedTitle.isBlank() || normalizedTitle.length() > 120) {
+      throw new IllegalArgumentException("タイトルは1〜120文字で指定してください。");
+    }
+    if (normalizedSummary.isBlank() || normalizedSummary.length() > 500) {
+      throw new IllegalArgumentException("要約は1〜500文字で指定してください。");
+    }
+    if (normalizedTags.isBlank() || normalizedTags.length() > 500) {
+      throw new IllegalArgumentException("タグを1つ以上指定してください。");
+    }
+    if (normalizedBody.isBlank() || normalizedBody.length() > 4000) {
+      throw new IllegalArgumentException("本文は1〜4000文字で指定してください。");
+    }
+    T_AiComment comment = repository.findByDiaryDate(diaryDate).orElseGet(T_AiComment::new);
+    comment.setDiaryDate(diaryDate);
+    comment.setTitle(normalizedTitle);
+    comment.setSummary(normalizedSummary);
+    comment.setTags(normalizedTags);
+    comment.setBody(normalizedBody);
+    comment.setPublishedAt(OffsetDateTime.now(ZoneOffset.UTC));
+    comment.setSourceType("AWS_BEDROCK_DIARY");
+    return toEntry(repository.save(comment));
+  }
+
   private String normalize(String value) {
     return value == null ? "" : value.strip();
   }
@@ -112,10 +154,22 @@ public class AiCommentService {
   private AiCommentEntry toEntry(T_AiComment comment) {
     return new AiCommentEntry(
         comment.getId(), comment.getDiaryDate(), comment.getTitle(), comment.getBody(),
-        comment.getPublishedAt(), comment.getSourceType());
+        comment.getPublishedAt(), comment.getSourceType(), comment.getSummary(),
+        splitTags(comment.getTags()));
+  }
+
+  private List<String> splitTags(String tags) {
+    return tags == null || tags.isBlank() ? List.of() : List.of(tags.split(","));
   }
 
   public record AiCommentEntry(
-      Long id, LocalDate diaryDate, String title, String body, OffsetDateTime publishedAt, String sourceType) {
+      Long id,
+      LocalDate diaryDate,
+      String title,
+      String body,
+      OffsetDateTime publishedAt,
+      String sourceType,
+      String summary,
+      List<String> tags) {
   }
 }

@@ -13,13 +13,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const timelineLoader = document.querySelector("[data-timeline-loader]");
   const timelineProgress = document.querySelector("[data-timeline-progress]");
   const initialTimelineItems = 18;
-  const timelinePageSize = 12;
+  const timelinePageSize = 15;
   let visibleTimelineItems = Math.min(initialTimelineItems, timelineItems.length);
 
   const renderTimelinePage = () => {
     visibleTimelineItems = Math.min(visibleTimelineItems, timelineItems.length);
     timelineItems.forEach((item, index) => { item.hidden = index >= visibleTimelineItems; });
-    if (timelineProgress) timelineProgress.textContent = `${visibleTimelineItems} / ${timelineItems.length}`;
+    if (timelineProgress) timelineProgress.textContent = visibleTimelineItems < timelineItems.length
+      ? `${timelineItems.length - visibleTimelineItems}件の過去ログ`
+      : "観測済み";
     if (timelineLoader) timelineLoader.hidden = visibleTimelineItems >= timelineItems.length;
   };
 
@@ -32,7 +34,10 @@ document.addEventListener("DOMContentLoaded", () => {
     timelineLoader.addEventListener("click", loadMore);
     if ("IntersectionObserver" in window) {
       const observer = new IntersectionObserver((entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) loadMore();
+        if (entries.some((entry) => entry.isIntersecting)) {
+          loadMore();
+          if (visibleTimelineItems >= timelineItems.length) observer.disconnect();
+        }
       }, { rootMargin: "240px 0px" });
       observer.observe(timelineLoader);
     }

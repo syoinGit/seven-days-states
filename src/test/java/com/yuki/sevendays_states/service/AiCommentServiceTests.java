@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -79,5 +80,21 @@ class AiCommentServiceTests {
     assertThat(service.latestBySourceType("AWS_BEDROCK", 20))
         .singleElement()
         .satisfies(comment -> assertThat(comment.body()).isEqualTo("静かな探索が続いています。"));
+  }
+
+  @Test
+  void publishesGeneratedDiaryWithSummaryAndTags() {
+    LocalDate date = LocalDate.of(2026, 8, 3);
+
+    service.publishGeneratedDiary(
+        date, "病院の灯り", "病院を中心に探索した一日。", List.of("探索", "病院", "探索"),
+        "生存者たちは病院へ向かった。");
+
+    assertThat(service.findByDiaryDate(date)).get().satisfies(diary -> {
+      assertThat(diary.title()).isEqualTo("病院の灯り");
+      assertThat(diary.summary()).isEqualTo("病院を中心に探索した一日。");
+      assertThat(diary.tags()).containsExactly("探索", "病院");
+      assertThat(diary.sourceType()).isEqualTo("AWS_BEDROCK_DIARY");
+    });
   }
 }

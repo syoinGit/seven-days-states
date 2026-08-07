@@ -5,6 +5,7 @@ import com.yuki.sevendays_states.service.CurrentWebAccountService;
 import com.yuki.sevendays_states.service.PlayerSocialService;
 import com.yuki.sevendays_states.service.PlayerStatusService;
 import com.yuki.sevendays_states.service.WatchpointAiPublishingService;
+import com.yuki.sevendays_states.service.WatchpointDiaryPublishingService;
 import com.yuki.sevendays_states.util.DisplayTimeFormatter;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -35,6 +36,8 @@ public class DashboardController {
   private static final DateTimeFormatter TIMELINE_TIME =
       DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
   private static final int EVENT_WINDOW_MINUTES = 5;
+  private static final int INITIAL_TIMELINE_ITEMS = 18;
+  private static final int RECENT_POST_MINUTES = 60;
   private static final DisplayTimeFormatter DISPLAY_TIME_FORMATTER = new DisplayTimeFormatter();
 
   private final DashboardViewService dashboardViewService;
@@ -44,6 +47,7 @@ public class DashboardController {
   private final PlayerStatusService playerStatusService;
   private final CurrentWebAccountService currentAccountService;
   private final PlayerSocialService playerSocialService;
+  private final WatchpointDiaryPublishingService diaryPublishingService;
 
   @GetMapping("/")
   public String landing(Authentication authentication) {
@@ -137,7 +141,61 @@ public class DashboardController {
     timeline.sort(Comparator.comparing(
         TimelineItem::occurredAt,
         Comparator.nullsLast(Comparator.reverseOrder())));
-    return List.copyOf(timeline);
+    return curatedTimeline(timeline);
+  }
+
+  /**
+   * Makes the first viewport a live observation feed instead of letting old social posts occupy it
+   * indefinitely. Everything remains available below it, with archived AI observations woven back
+   * into the history at a restrained interval.
+   */
+  static List<TimelineItem> curatedTimeline(List<TimelineItem> sorted) {
+    if (sorted.size() <= INITIAL_TIMELINE_ITEMS) {
+      return List.copyOf(sorted);
+    }
+    LocalDateTime newest = sorted.stream()
+        .map(item -> parseTimelineTime(item.occurredAt()))
+        .filter(java.util.Objects::nonNull)
+        .max(LocalDateTime::compareTo)
+        .orElse(LocalDateTime.now());
+    List<TimelineItem> head = new ArrayList<>();
+    List<TimelineItem> history = new ArrayList<>();
+    int recentPosts = 0;
+    int recentAi = 0;
+    for (TimelineItem item : sorted) {
+      LocalDateTime occurredAt = parseTimelineTime(item.occurredAt());
+      boolean recentPost = "POST".equals(item.itemType())
+          && occurredAt != null
+          && !occurredAt.isBefore(newest.minusMinutes(RECENT_POST_MINUTES));
+      boolean include = head.size() < INITIAL_TIMELINE_ITEMS
+          && ("EVENT".equals(item.itemType())
+              || (recentPost && recentPosts < 3)
+              || ("AI".equals(item.itemType()) && recentAi < 1));
+      if (include) {
+        head.add(item);
+        recentPosts += "POST".equals(item.itemType()) ? 1 : 0;
+        recentAi += "AI".equals(item.itemType()) ? 1 : 0;
+      } else {
+        history.add(item);
+      }
+    }
+    head.sort(Comparator.comparing(
+        TimelineItem::occurredAt, Comparator.nullsLast(Comparator.reverseOrder())));
+    List<TimelineItem> archivedAi = history.stream()
+        .filter(item -> "AI".equals(item.itemType())).toList();
+    List<TimelineItem> ordinaryHistory = new ArrayList<>(history.stream()
+        .filter(item -> !"AI".equals(item.itemType())).toList());
+    List<TimelineItem> result = new ArrayList<>(sorted.size());
+    result.addAll(head);
+    int aiIndex = 0;
+    for (int index = 0; index < ordinaryHistory.size(); index++) {
+      result.add(ordinaryHistory.get(index));
+      if ((index + 1) % 12 == 0 && aiIndex < archivedAi.size()) {
+        result.add(archivedAi.get(aiIndex++));
+      }
+    }
+    result.addAll(archivedAi.subList(aiIndex, archivedAi.size()));
+    return List.copyOf(result);
   }
 
   /**
@@ -259,6 +317,23 @@ public class DashboardController {
     model.addAttribute("packet", diaryMaintenanceService.packet(date));
     model.addAttribute("editorEnabled", aiCommentService.editorEnabled());
     return "diary-editor";
+  }
+
+  @PostMapping("/maintenance/diaries/{date}/generate")
+  public String generateDiary(
+      @PathVariable LocalDate date,
+      RedirectAttributes redirectAttributes) {
+    try {
+      var result = diaryPublishingService.publishNow(date);
+      boolean published = result.status()
+          == WatchpointDiaryPublishingService.PublishStatus.PUBLISHED;
+      redirectAttributes.addFlashAttribute(published ? "notice" : "error",
+          published ? date + " の日記をWATCHPOINTが作成しました。"
+              : "AI日記生成が無効です。設定を確認してください。");
+    } catch (RuntimeException exception) {
+      redirectAttributes.addFlashAttribute("error", "AI日記を生成できませんでした。ログを確認してください。");
+    }
+    return "redirect:/maintenance/diaries/" + date;
   }
 
   @PostMapping("/maintenance/diaries/{date}/edit")

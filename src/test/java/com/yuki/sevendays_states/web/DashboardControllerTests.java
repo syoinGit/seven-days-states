@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -58,7 +59,8 @@ class DashboardControllerTests {
     DashboardViewService.TravelEntry event = travelEntry("2026-08-05 19:40:00", "PlayerA");
     var aiComment = new AiCommentService.AiCommentEntry(
         2L, null, "WATCHPOINT観測記録", "探索範囲が広がっています。",
-        OffsetDateTime.of(2026, 8, 5, 10, 42, 0, 0, ZoneOffset.UTC), "AWS_BEDROCK");
+        OffsetDateTime.of(2026, 8, 5, 10, 42, 0, 0, ZoneOffset.UTC), "AWS_BEDROCK",
+        null, List.of());
 
     List<DashboardController.TimelineItem> timeline = DashboardController.timeline(
         List.of(event), List.of(), List.of(aiComment));
@@ -100,6 +102,24 @@ class DashboardControllerTests {
     assertThat(sampled).extracting(DashboardViewService.TravelEntry::kind)
         .contains("JOIN", "LEAVE", "WANDERING_HORDE");
     assertThat(sampled).filteredOn(item -> "KILL".equals(item.kind())).hasSize(1);
+  }
+
+  @Test
+  void movesStalePlayerPostsBelowTheLiveViewportWithoutDeletingThem() {
+    List<DashboardViewService.TravelEntry> events = IntStream.range(0, 20)
+        .mapToObj(index -> travelEntry(
+            "2026-08-05 %02d:%02d:00".formatted(18 + index / 12, (index % 12) * 5),
+            "Player" + index))
+        .toList();
+    var stalePost = new PlayerSocialService.PostView(
+        1L, 10L, "PlayerB", "古い投稿", "2026-08-05 16:00:00", 0, false, true);
+
+    List<DashboardController.TimelineItem> timeline = DashboardController.timeline(
+        events, List.of(stalePost));
+
+    assertThat(timeline.subList(0, 18))
+        .noneMatch(item -> item.itemType().equals("POST"));
+    assertThat(timeline).anyMatch(item -> item.itemType().equals("POST"));
   }
 
   private static DashboardViewService.TravelEntry travelEntry(String occurredAt, String actor) {

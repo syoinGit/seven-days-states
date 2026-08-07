@@ -33,24 +33,45 @@ public class WatchpointAiPublishingService {
     if (recentlyPublished) {
       return new PublishResult(PublishStatus.NOT_DUE, null);
     }
-    return publishNow();
+    WatchpointAiObservationService.AnalysisRequest request = observationService.buildRequest();
+    if (!hasActivity(request)) {
+      return new PublishResult(PublishStatus.NO_ACTIVITY, null);
+    }
+    return publish(request);
   }
 
   public PublishResult publishNow() {
     if (!properties.bedrockEnabled()) {
       return new PublishResult(PublishStatus.DISABLED, null);
     }
-    BedrockWatchpointClient.GeneratedPost generated =
-        bedrockClient.generate(observationService.buildRequest());
+    return publish(observationService.buildRequest());
+  }
+
+  private PublishResult publish(WatchpointAiObservationService.AnalysisRequest request) {
+    BedrockWatchpointClient.GeneratedPost generated = bedrockClient.generate(request);
     AiCommentService.AiCommentEntry saved =
         aiCommentService.publishGenerated(TITLE, generated.body(), SOURCE_TYPE);
     telnetCommandClient.broadcast("WATCHPOINT: " + saved.body());
     return new PublishResult(PublishStatus.PUBLISHED, saved);
   }
 
+  private boolean hasActivity(WatchpointAiObservationService.AnalysisRequest request) {
+    var observation = request.observation();
+    if (observation == null || observation.currentTotals() == null) {
+      return false;
+    }
+    var totals = observation.currentTotals();
+    return !observation.events().isEmpty()
+        || totals.joins() > 0 || totals.leaves() > 0 || totals.kills() > 0
+        || totals.sleeperEncounters() > 0 || totals.deaths() > 0 || totals.hordeEvents() > 0
+        || (totals.onFootDistanceMeters() != null && totals.onFootDistanceMeters().signum() > 0)
+        || (totals.vehicleDistanceMeters() != null && totals.vehicleDistanceMeters().signum() > 0);
+  }
+
   public enum PublishStatus {
     PUBLISHED,
     NOT_DUE,
+    NO_ACTIVITY,
     DISABLED
   }
 
